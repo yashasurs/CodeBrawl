@@ -1,50 +1,52 @@
 "use client";
 import React from 'react';
+import Image from 'next/image';
 
 export default function SignupPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gradient-to-br from-black via-purple-900/20 to-black relative overflow-hidden">
-      {/* Subtle Background Animation Layer */}
-      <div className="absolute inset-0 pointer-events-none">
-        {/* Large subtle gradient orbs */}
-        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-purple-500/5 rounded-full animate-pulse" style={{animationDuration: '4s'}}></div>
-        <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-purple-400/3 rounded-full animate-pulse" style={{animationDuration: '6s', animationDelay: '2s'}}></div>
-        
-        {/* Floating particles */}
-        <div className="absolute top-20 left-10 w-1 h-1 bg-purple-400/20 rounded-full animate-float-slow"></div>
-        <div className="absolute top-32 right-20 w-1 h-1 bg-purple-300/15 rounded-full animate-float-slow" style={{animationDelay: '2s'}}></div>
-        <div className="absolute bottom-40 left-16 w-1 h-1 bg-purple-500/25 rounded-full animate-float-slow" style={{animationDelay: '4s'}}></div>
-        <div className="absolute bottom-20 right-12 w-1 h-1 bg-purple-400/20 rounded-full animate-float-slow" style={{animationDelay: '6s'}}></div>
-        <div className="absolute top-1/2 left-8 w-1 h-1 bg-purple-300/15 rounded-full animate-float-slow" style={{animationDelay: '1s'}}></div>
-        <div className="absolute top-3/4 right-8 w-1 h-1 bg-purple-500/20 rounded-full animate-float-slow" style={{animationDelay: '3s'}}></div>
+    <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gradient-to-br from-black via-purple-950 to-black relative overflow-hidden">
+      {/* Background Animation */}
+      <div className="absolute inset-0 opacity-30">
+        <div className="absolute top-20 left-20 w-72 h-72 bg-purple-600 rounded-full mix-blend-multiply filter blur-xl animate-blob"></div>
+        <div className="absolute top-40 right-20 w-72 h-72 bg-purple-800 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-2000"></div>
+        <div className="absolute -bottom-8 left-40 w-72 h-72 bg-purple-700 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-4000"></div>
       </div>
 
       <style jsx global>{`
-        /* Subtle Background Animation */
-        @keyframes float-slow {
-          0%, 100% { 
-            transform: translateY(0px) translateX(0px); 
-            opacity: 0.3; 
+        @keyframes blob {
+          0% {
+            transform: translate(0px, 0px) scale(1);
           }
-          25% { 
-            transform: translateY(-8px) translateX(2px); 
-            opacity: 0.6; 
+          33% {
+            transform: translate(30px, -50px) scale(1.1);
           }
-          50% { 
-            transform: translateY(-12px) translateX(-2px); 
-            opacity: 0.4; 
+          66% {
+            transform: translate(-20px, 20px) scale(0.9);
           }
-          75% { 
-            transform: translateY(-6px) translateX(1px); 
-            opacity: 0.7; 
+          100% {
+            transform: translate(0px, 0px) scale(1);
           }
         }
-        
-        .animate-float-slow {
-          animation: float-slow 8s ease-in-out infinite;
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+        .animation-delay-4000 {
+          animation-delay: 4s;
         }
       `}</style>
-      <div className="text-center mb-8">
+      <div className="relative z-10 text-center mb-8">
+        <div className="mb-6">
+          <Image 
+            src="/logo.svg" 
+            alt="CodeBrawl Logo" 
+            width={80} 
+            height={80}
+            className="mx-auto drop-shadow-lg animate-pulse"
+          />
+        </div>
         <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-purple-400 via-purple-300 to-purple-500 bg-clip-text text-transparent">
           Join CodeBrawl
         </h1>
@@ -53,7 +55,7 @@ export default function SignupPage() {
         </p>
       </div>
       {/* From Uiverse.io by micaelgomestavares */}
-      <div className="bg-gray-900/70 backdrop-blur-sm p-8 rounded-3xl shadow-lg w-full max-w-md border border-purple-600">
+      <div className="relative z-10 bg-gray-900/70 backdrop-blur-sm p-8 rounded-3xl shadow-lg w-full max-w-md border border-purple-600">
         <form className="flex flex-col gap-4">
           <div className="flex flex-col">
             <label className="text-purple-300 font-semibold mb-2">Full Name</label>
