@@ -27,19 +27,21 @@
 
 ## 📁 Project Structure
 
+```
 CodeBrawl/
-├── frontend/ # Next.js frontend app
-│ ├── pages/ # Route-based views
-│ ├── components/ # UI components
-│ ├── lib/ # API utilities
-│ └── public/ # Static assets
-├── backend/ # Express.js backend server
-│ ├── models/ # Mongoose models (User, Problem, Match)
-│ ├── routes/ # REST API routes
-│ ├── controllers/ # Business logic handlers
-│ └── socket/ # WebSocket (duel logic)
+├── client/                     # Next.js frontend app
+│   ├── src/app/               # App router pages
+│   ├── components/            # UI components
+│   ├── lib/                   # API utilities
+│   └── public/                # Static assets
+├── server/                    # Express.js backend server
+│   ├── models/                # Mongoose models (User, Problem, Match)
+│   ├── routes/                # REST API routes
+│   ├── controllers/           # Business logic handlers
+│   └── socket/                # WebSocket (duel logic)
 ├── README.md
 └── .env
+```
 
 
 ---
