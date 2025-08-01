@@ -1,9 +1,14 @@
 "use client";
 import React from 'react';
+import Link from 'next/link';
 import Image from 'next/image';
+import Navbar from '@/components/Navbar';
 
 export default function LoginPage() {
   return (
+    <>
+      <Navbar showAuthButtons={false} />
+
     <main className="flex min-h-screen flex-col items-center justify-center p-24">
       <div className="text-center mb-8">
         <div className="mb-6">
@@ -107,5 +112,6 @@ export default function LoginPage() {
         </form>
       </div>
     </main>
+    </>
   );
 }
