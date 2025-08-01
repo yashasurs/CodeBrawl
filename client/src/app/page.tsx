@@ -4,16 +4,9 @@ import Image from 'next/image';
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-purple-950 to-black text-white relative overflow-hidden">
-      {/* Background Animation */}
-      <div className="absolute inset-0 opacity-30">
-        <div className="absolute top-20 left-20 w-72 h-72 bg-purple-600 rounded-full mix-blend-multiply filter blur-xl animate-blob"></div>
-        <div className="absolute top-40 right-20 w-72 h-72 bg-purple-800 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-2000"></div>
-        <div className="absolute -bottom-8 left-40 w-72 h-72 bg-purple-700 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-4000"></div>
-      </div>
-
+    <>
       {/* Navigation */}
-      <nav className="relative z-10 flex justify-between items-center p-6 backdrop-blur-sm bg-black/20 border-b border-purple-800/30">
+      <nav className="flex justify-between items-center p-6 backdrop-blur-sm bg-black/20 border-b border-purple-800/30">
         <div className="flex items-center space-x-3">
           <Image 
             src="/logo.svg" 
@@ -43,7 +36,7 @@ export default function HomePage() {
       </nav>
 
       {/* Hero Section */}
-      <div className="relative z-10 flex flex-col items-center justify-center text-center px-6 py-20">
+      <div className="flex flex-col items-center justify-center text-center px-6 py-20">
         <div className="mb-8">
           <Image 
             src="/logo.svg" 
@@ -110,7 +103,7 @@ export default function HomePage() {
       </div>
 
       {/* Features Section */}
-      <div className="relative z-10 py-20 px-6">
+      <div className="py-20 px-6">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-4xl md:text-5xl font-bold text-center mb-16 bg-gradient-to-r from-purple-400 to-white bg-clip-text text-transparent">
             Battle Features
@@ -189,7 +182,7 @@ export default function HomePage() {
       </div>
 
       {/* CTA Section */}
-      <div className="relative z-10 py-20 px-6 text-center">
+      <div className="py-20 px-6 text-center">
         <div className="max-w-4xl mx-auto bg-black/40 backdrop-blur-sm border border-purple-800/30 rounded-2xl p-12">
           <h2 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-purple-400 to-white bg-clip-text text-transparent">
             Ready to Prove Your Skills?
@@ -215,7 +208,7 @@ export default function HomePage() {
       </div>
 
       {/* Footer */}
-      <footer className="relative z-10 py-8 px-6 border-t border-purple-800/30 backdrop-blur-sm bg-black/20">
+      <footer className="py-8 px-6 border-t border-purple-800/30 backdrop-blur-sm bg-black/20">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center">
           <div className="flex items-center space-x-3 mb-4 md:mb-0">
             <Image 
@@ -231,32 +224,6 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
-
-      <style jsx>{`
-        @keyframes blob {
-          0% {
-            transform: translate(0px, 0px) scale(1);
-          }
-          33% {
-            transform: translate(30px, -50px) scale(1.1);
-          }
-          66% {
-            transform: translate(-20px, 20px) scale(0.9);
-          }
-          100% {
-            transform: translate(0px, 0px) scale(1);
-          }
-        }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-      `}</style>
-    </div>
+    </>
   );
 }

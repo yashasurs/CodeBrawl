@@ -4,40 +4,8 @@ import Image from 'next/image';
 
 export default function SignupPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gradient-to-br from-black via-purple-950 to-black relative overflow-hidden">
-      {/* Background Animation */}
-      <div className="absolute inset-0 opacity-30">
-        <div className="absolute top-20 left-20 w-72 h-72 bg-purple-600 rounded-full mix-blend-multiply filter blur-xl animate-blob"></div>
-        <div className="absolute top-40 right-20 w-72 h-72 bg-purple-800 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-2000"></div>
-        <div className="absolute -bottom-8 left-40 w-72 h-72 bg-purple-700 rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-4000"></div>
-      </div>
-
-      <style jsx global>{`
-        @keyframes blob {
-          0% {
-            transform: translate(0px, 0px) scale(1);
-          }
-          33% {
-            transform: translate(30px, -50px) scale(1.1);
-          }
-          66% {
-            transform: translate(-20px, 20px) scale(0.9);
-          }
-          100% {
-            transform: translate(0px, 0px) scale(1);
-          }
-        }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-      `}</style>
-      <div className="relative z-10 text-center mb-8">
+    <main className="flex min-h-screen flex-col items-center justify-center p-24">
+      <div className="text-center mb-8">
         <div className="mb-6">
           <Image 
             src="/logo.svg" 
@@ -55,7 +23,7 @@ export default function SignupPage() {
         </p>
       </div>
       {/* From Uiverse.io by micaelgomestavares */}
-      <div className="relative z-10 bg-gray-900/70 backdrop-blur-sm p-8 rounded-3xl shadow-lg w-full max-w-md border border-purple-600">
+      <div className="bg-gray-900/70 backdrop-blur-sm p-8 rounded-3xl shadow-lg w-full max-w-md border border-purple-600">
         <form className="flex flex-col gap-4">
           <div className="flex flex-col">
             <label className="text-purple-300 font-semibold mb-2">Full Name</label>
