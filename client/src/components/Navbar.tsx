@@ -8,7 +8,7 @@ interface NavbarProps {
 
 export default function Navbar({ showAuthButtons = true }: NavbarProps) {
   return (
-    <nav className="flex justify-between items-center p-6 backdrop-blur-sm bg-black/20 border-b border-purple-800/30">
+    <nav className="flex justify-between items-center p-4 backdrop-blur-sm bg-black/20 border-b border-purple-800/30">
       <Link href="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
         <Image 
           src="/logo.svg" 

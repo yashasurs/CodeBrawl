@@ -4,9 +4,9 @@ import Image from 'next/image';
 
 export default function SignupForm() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="text-center mb-8">
-        <div className="mb-6">
+    <main className="flex min-h-screen flex-col items-center justify-center p-8">
+      <div className="text-center mb-4">
+        <div className="mb-4">
           <Image 
             src="/logo.svg" 
             alt="CodeBrawl Logo" 
@@ -23,7 +23,7 @@ export default function SignupForm() {
         </p>
       </div>
       {/* From Uiverse.io by micaelgomestavares */}
-      <div className="bg-gray-900/70 backdrop-blur-sm p-8 rounded-3xl shadow-lg w-full max-w-md border border-purple-600">
+      <div className="bg-gray-900/70 backdrop-blur-sm p-8 rounded-3xl shadow-lg w-full max-w-lg border border-purple-600">
         <form className="flex flex-col gap-4">
           <div className="flex flex-col">
             <label className="text-purple-300 font-semibold mb-2">Full Name</label>
