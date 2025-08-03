@@ -1,6 +1,7 @@
 import mongoose, { Schema } from "mongoose";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+import { getInitialEloRating } from "../utils/leetcodeUtils.js";
 
 const userSchema = new Schema(
     {
@@ -29,6 +30,11 @@ const userSchema = new Schema(
         },
         avatar: {
             type: String, 
+            default: ""
+        },
+        leetcodeUsername: {
+            type: String,
+            trim: true,
             default: ""
         },
         password: {
@@ -93,6 +99,23 @@ userSchema.pre("save", async function (next) {
     next()
 })
 
+// Pre-save middleware to calculate initial ELO rating based on LeetCode data
+userSchema.pre("save", async function (next) {
+    // Only calculate ELO for new users with LeetCode username
+    if (this.isNew && this.leetcodeUsername && this.leetcodeUsername.trim() !== '') {
+        try {
+            console.log(`Calculating initial ELO for user ${this.username} based on LeetCode profile: ${this.leetcodeUsername}`);
+            const calculatedElo = await getInitialEloRating(this.leetcodeUsername);
+            this.eloRating = calculatedElo;
+            console.log(`Initial ELO set to ${calculatedElo} for user ${this.username}`);
+        } catch (error) {
+            console.error(`Error calculating ELO for ${this.username}:`, error);
+            // Keep default ELO on error
+        }
+    }
+    next();
+});
+
 userSchema.methods.isPasswordCorrect = async function(password){
     return await bcrypt.compare(password, this.password)
 }
@@ -123,6 +146,32 @@ userSchema.methods.generateRefreshToken = function(){
         }
     )
 }
+
+// Method to update ELO rating based on LeetCode profile
+userSchema.methods.updateEloFromLeetCode = async function() {
+    if (!this.leetcodeUsername || this.leetcodeUsername.trim() === '') {
+        throw new Error('LeetCode username is required to update ELO rating');
+    }
+    
+    try {
+        console.log(`Updating ELO for user ${this.username} based on LeetCode profile: ${this.leetcodeUsername}`);
+        const calculatedElo = await getInitialEloRating(this.leetcodeUsername);
+        
+        // Only update if the calculated ELO is higher than current (to prevent rating drops)
+        if (calculatedElo > this.eloRating) {
+            const oldElo = this.eloRating;
+            this.eloRating = calculatedElo;
+            console.log(`ELO updated from ${oldElo} to ${calculatedElo} for user ${this.username}`);
+            return { updated: true, oldElo, newElo: calculatedElo };
+        } else {
+            console.log(`No ELO update needed for user ${this.username}. Current: ${this.eloRating}, Calculated: ${calculatedElo}`);
+            return { updated: false, currentElo: this.eloRating, calculatedElo };
+        }
+    } catch (error) {
+        console.error(`Error updating ELO for ${this.username}:`, error);
+        throw error;
+    }
+};
 
 // Calculate win rate
 userSchema.virtual('winRate').get(function() {
