@@ -30,17 +30,56 @@
 ```
 CodeBrawl/
 ├── client/                     # Next.js frontend app
-│   ├── src/app/               # App router pages
-│   ├── components/            # UI components
-│   ├── lib/                   # API utilities
-│   └── public/                # Static assets
+│   ├── src/
+│   │   ├── app/               # App router pages
+│   │   │   ├── login/         # Login page
+│   │   │   ├── signup/        # Signup page
+│   │   │   ├── globals.css    # Global styles
+│   │   │   ├── layout.tsx     # Root layout
+│   │   │   └── page.tsx       # Home page
+│   │   └── components/        # UI components
+│   │       ├── BackgroundAnimation.tsx
+│   │       ├── LoginForm.tsx
+│   │       ├── Navbar.tsx
+│   │       └── SignupForm.tsx
+│   ├── public/                # Static assets
+│   │   ├── file.svg
+│   │   ├── globe.svg
+│   │   ├── logo.svg
+│   │   ├── next.svg
+│   │   ├── vercel.svg
+│   │   └── window.svg
+│   ├── package.json
+│   ├── next.config.ts
+│   ├── tailwind.config.js
+│   └── tsconfig.json
 ├── server/                    # Express.js backend server
-│   ├── models/                # Mongoose models (User, Problem, Match)
-│   ├── routes/                # REST API routes
-│   ├── controllers/           # Business logic handlers
-│   └── socket/                # WebSocket (duel logic)
-├── README.md
-└── .env
+│   ├── src/
+│   │   ├── controllers/       # Business logic handlers
+│   │   ├── db/               # Database connection
+│   │   │   └── dbConnect.js
+│   │   ├── middlewares/      # Custom middleware
+│   │   ├── models/           # Mongoose models
+│   │   │   ├── User.model.js
+│   │   │   ├── Problem.model.js
+│   │   │   ├── Match.model.js
+│   │   │   └── index.js
+│   │   ├── routes/           # REST API routes
+│   │   ├── utils/            # Utility functions
+│   │   │   ├── ApiError.js
+│   │   │   ├── ApiResponse.js
+│   │   │   ├── asyncHandler.js
+│   │   │   ├── leetcodeUtils.js
+│   │   │   └── testLeetCode.js
+│   │   ├── app.js            # Express app configuration
+│   │   ├── constants.js      # Application constants
+│   │   └── index.js          # Server entry point
+│   ├── public/
+│   │   └── temp/             # Temporary files
+│   ├── .env                  # Environment variables
+│   └── package.json
+└─── README.md
+
 ```
 
 
