@@ -1,7 +1,6 @@
 "use client";
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import PageHeader from '@/components/PageHeader';
 import CurrentUserStats from '@/components/leaderboard/CurrentUserStats';
 import LeaderboardFilters from '@/components/leaderboard/LeaderboardFilters';
 import LeaderboardTable from '@/components/leaderboard/LeaderboardTable';
@@ -129,12 +128,7 @@ export default function LeaderboardPage() {
     <>
       <Navbar showAuthButtons={false} />
 
-      <PageHeader
-        title="Global Leaderboard"
-        description="Compete with the best coders around the world. Climb the ranks and establish your coding supremacy."
-      />
-
-      <div className="max-w-6xl mx-auto px-6">
+      <div className="max-w-6xl mx-auto px-6 pt-8">
         <CurrentUserStats
           rank={11}
           elo={1456}

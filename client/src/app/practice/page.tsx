@@ -1,7 +1,6 @@
 "use client";
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import PageHeader from '@/components/PageHeader';
 import StatsOverview from '@/components/practice/StatsOverview';
 import ProblemFilters from '@/components/practice/ProblemFilters';
 import ProblemsTable from '@/components/practice/ProblemsTable';
@@ -11,6 +10,7 @@ import { useState } from 'react';
 export default function PracticePage() {
   const [selectedDifficulty, setSelectedDifficulty] = useState('all');
   const [selectedTopic, setSelectedTopic] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const problems = [
     {
@@ -72,7 +72,8 @@ export default function PracticePage() {
   const filteredProblems = problems.filter(problem => {
     const difficultyMatch = selectedDifficulty === 'all' || problem.difficulty.toLowerCase() === selectedDifficulty;
     const topicMatch = selectedTopic === 'all' || problem.topic === selectedTopic;
-    return difficultyMatch && topicMatch;
+    const searchMatch = searchQuery === '' || problem.title.toLowerCase().includes(searchQuery.toLowerCase());
+    return difficultyMatch && topicMatch && searchMatch;
   });
 
   const stats = {
@@ -87,12 +88,7 @@ export default function PracticePage() {
     <>
       <Navbar showAuthButtons={false} />
 
-      <PageHeader
-        title="Practice Arena"
-        description="Sharpen your coding skills with our curated collection of problems. Practice at your own pace and master different algorithms."
-      />
-
-      <div className="max-w-6xl mx-auto px-6">
+      <div className="max-w-6xl mx-auto px-6 pt-8">
         <StatsOverview
           totalSolved={stats.totalSolved}
           easySolved={stats.easySolved}
@@ -103,8 +99,10 @@ export default function PracticePage() {
         <ProblemFilters
           selectedDifficulty={selectedDifficulty}
           selectedTopic={selectedTopic}
+          searchQuery={searchQuery}
           onDifficultyChange={setSelectedDifficulty}
           onTopicChange={setSelectedTopic}
+          onSearchChange={setSearchQuery}
           resultCount={filteredProblems.length}
           totalCount={problems.length}
         />

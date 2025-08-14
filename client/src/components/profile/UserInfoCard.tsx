@@ -21,9 +21,22 @@ export default function UserInfoCard({
   wins, 
   winRate 
 }: UserInfoCardProps) {
+  const handleLogout = () => {
+    // Add logout logic here
+    console.log('Logging out...');
+  };
+
   return (
-    <div className="bg-gradient-to-r from-purple-900/40 to-purple-800/40 backdrop-blur-sm border border-purple-600/50 rounded-2xl p-8 mb-8">
-      <div className="flex flex-col md:flex-row items-center md:items-start space-y-6 md:space-y-0 md:space-x-8">
+    <div className="bg-gradient-to-r from-purple-900/40 to-purple-800/40 backdrop-blur-sm border border-purple-600/50 rounded-2xl p-8 mb-8 relative">
+      {/* Logout Button */}
+      <button 
+        onClick={handleLogout}
+        className="absolute top-6 right-6 px-4 py-2 border border-red-500/70 text-red-400 hover:bg-red-600/20 hover:text-red-300 rounded-lg font-medium transition-colors duration-200 text-sm"
+      >
+        Logout
+      </button>
+
+      <div className="flex flex-col md:flex-row items-center md:items-start space-y-6 md:space-y-0 md:space-x-8 pr-20">
         {/* Avatar and Basic Info */}
         <div className="text-center md:text-left">
           <div className="w-32 h-32 bg-purple-600 rounded-full flex items-center justify-center text-6xl mb-4 mx-auto md:mx-0">
