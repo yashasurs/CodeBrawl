@@ -1,8 +1,36 @@
 "use client";
-import React from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginForm() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const { login } = useAuth();
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+
+    try {
+      await login(email, password);
+      router.push('/battle'); // Redirect to battle page after successful login
+    } catch (error: any) {
+      setError(error.message || 'Login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       <div className="text-center mb-8">
@@ -24,7 +52,13 @@ export default function LoginForm() {
       </div>
       {/* From Uiverse.io by micaelgomestavares */}
       <div className="bg-gray-900/70 backdrop-blur-sm p-8 rounded-3xl shadow-lg w-full max-w-lg border border-purple-600">
-        <form className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {error && (
+            <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded-xl">
+              {error}
+            </div>
+          )}
+
           <div className="flex flex-col">
             <label className="text-purple-300 font-semibold mb-2">Email</label>
             <div className="border-2 border-purple-500 bg-gray-800 rounded-xl h-12 flex items-center px-3 transition-colors focus-within:border-purple-400">
@@ -34,9 +68,12 @@ export default function LoginForm() {
                 </g>
               </svg>
               <input 
-                type="text" 
+                type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="ml-3 rounded-xl border-none w-full h-full focus:outline-none bg-transparent text-purple-200 placeholder-purple-400" 
                 placeholder="Enter your Email" 
+                required
               />
             </div>
           </div>
@@ -49,19 +86,33 @@ export default function LoginForm() {
                 <path fill="#a855f7" d="m304 224c-8.832031 0-16-7.167969-16-16v-80c0-52.929688-43.070312-96-96-96s-96 43.070312-96 96v80c0 8.832031-7.167969 16-16 16s-16-7.167969-16-16v-80c0-70.59375 57.40625-128 128-128s128 57.40625 128 128v80c0 8.832031-7.167969 16-16 16zm0 0" />
               </svg>
               <input 
-                type="password" 
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="ml-3 rounded-xl border-none w-full h-full focus:outline-none bg-transparent text-purple-200 placeholder-purple-400" 
                 placeholder="Enter your Password" 
+                required
               />
-              <svg viewBox="0 0 576 512" height="1em" xmlns="http://www.w3.org/2000/svg">
-                <path fill="#a855f7" d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM144 256a144 144 0 1 1 288 0 144 144 0 1 1 -288 0zm144-64c0 35.3-28.7 64-64 64c-7.1 0-13.9-1.2-20.3-3.3c-5.5-1.8-11.9 1.6-11.7 7.4c.3 6.9 1.3 13.8 3.2 20.7c13.7 51.2 66.4 81.6 117.6 67.9s81.6-66.4 67.9-117.6c-11.1-41.5-47.8-69.4-88.6-71.1c-5.8-.2-9.2 6.1-7.4 11.7c2.1 6.4 3.3 13.2 3.3 20.3z" />
-              </svg>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="ml-2 focus:outline-none"
+              >
+                <svg viewBox="0 0 576 512" height="1em" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="#a855f7" d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM144 256a144 144 0 1 1 288 0 144 144 0 1 1 -288 0zm144-64c0 35.3-28.7 64-64 64c-7.1 0-13.9-1.2-20.3-3.3c-5.5-1.8-11.9 1.6-11.7 7.4c.3 6.9 1.3 13.8 3.2 20.7c13.7 51.2 66.4 81.6 117.6 67.9s81.6-66.4 67.9-117.6c-11.1-41.5-47.8-69.4-88.6-71.1c-5.8-.2-9.2 6.1-7.4 11.7c2.1 6.4 3.3 13.2 3.3 20.3z" />
+                </svg>
+              </button>
             </div>
           </div>
 
           <div className="flex flex-row items-center justify-between gap-4 my-2">
             <div className="flex items-center">
-              <input type="checkbox" className="mr-2 accent-purple-500" />
+              <input 
+                type="checkbox" 
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="mr-2 accent-purple-500" 
+              />
               <label className="text-sm text-purple-300">Remember me</label>
             </div>
             <span className="text-sm text-purple-400 font-medium cursor-pointer hover:text-purple-300">Forgot password?</span>
@@ -69,13 +120,14 @@ export default function LoginForm() {
 
           <button 
             type="submit"
-            className="mt-4 mb-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-xl h-12 w-full cursor-pointer transition-colors"
+            disabled={isLoading}
+            className="mt-4 mb-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl h-12 w-full cursor-pointer transition-colors"
           >
-            Sign In
+            {isLoading ? 'Signing In...' : 'Sign In'}
           </button>
 
           <p className="text-center text-purple-300 text-sm my-2">
-            Don't have an account? <span className="text-purple-400 font-medium cursor-pointer hover:text-purple-200">Sign Up</span>
+            Don't have an account? <Link href="/signup" className="text-purple-400 font-medium cursor-pointer hover:text-purple-200">Sign Up</Link>
           </p>
           
           <p className="text-center text-purple-300 text-sm my-2">Or With</p>

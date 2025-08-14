@@ -1,13 +1,18 @@
 "use client";
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import QueueSection from '@/components/battle/QueueSection';
 import LiveBattles from '@/components/battle/LiveBattles';
 import RecentResults from '@/components/battle/RecentResults';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 export default function BattlePage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
   const [isInQueue, setIsInQueue] = useState(false);
   const [queueTime, setQueueTime] = useState(0);
   const [activeMatches, setActiveMatches] = useState([
@@ -15,6 +20,13 @@ export default function BattlePage() {
     { id: 2, player1: "ByteWarrior", player2: "StackOverflow", rating1: 1823, rating2: 1798, timeLeft: "12:20" },
     { id: 3, player1: "DevGuru", player2: "CodingBeast", rating1: 1234, rating2: 1289, timeLeft: "05:15" },
   ]);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -41,6 +53,23 @@ export default function BattlePage() {
     setIsInQueue(false);
     setQueueTime(0);
   };
+
+  // Show loading while checking authentication
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-purple-600 mx-auto"></div>
+          <p className="text-purple-300 mt-4">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render anything if user is not authenticated (redirect will happen)
+  if (!user) {
+    return null;
+  }
 
   return (
     <>

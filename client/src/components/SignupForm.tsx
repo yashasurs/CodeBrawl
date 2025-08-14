@@ -1,8 +1,79 @@
 "use client";
-import React from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 
 export default function SignupForm() {
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    username: '',
+    leetcodeUsername: '',
+    password: '',
+    confirmPassword: ''
+  });
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const { register } = useAuth();
+  const router = useRouter();
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    // Validation
+    if (!formData.fullName || !formData.email || !formData.username || !formData.password) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
+
+    if (!agreeToTerms) {
+      setError('Please agree to the Terms & Conditions');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      await register(
+        formData.fullName,
+        formData.email,
+        formData.username,
+        formData.password,
+        formData.leetcodeUsername || undefined
+      );
+      router.push('/battle'); // Redirect to battle page after successful registration
+    } catch (error: any) {
+      setError(error.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       <div className="text-center mb-4">
@@ -24,7 +95,13 @@ export default function SignupForm() {
       </div>
       {/* From Uiverse.io by micaelgomestavares */}
       <div className="bg-gray-900/70 backdrop-blur-sm p-8 rounded-3xl shadow-lg w-full max-w-lg border border-purple-600">
-        <form className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {error && (
+            <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded-xl">
+              {error}
+            </div>
+          )}
+
           <div className="flex flex-col">
             <label className="text-purple-300 font-semibold mb-2">Full Name</label>
             <div className="border-2 border-purple-500 bg-gray-800 rounded-xl h-12 flex items-center px-3 transition-colors focus-within:border-purple-400">
@@ -33,8 +110,30 @@ export default function SignupForm() {
               </svg>
               <input 
                 type="text" 
+                name="fullName"
+                value={formData.fullName}
+                onChange={handleInputChange}
                 className="ml-3 rounded-xl border-none w-full h-full focus:outline-none bg-transparent text-purple-200 placeholder-purple-400" 
                 placeholder="Enter your full name" 
+                required
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col">
+            <label className="text-purple-300 font-semibold mb-2">Username</label>
+            <div className="border-2 border-purple-500 bg-gray-800 rounded-xl h-12 flex items-center px-3 transition-colors focus-within:border-purple-400">
+              <svg height={20} viewBox="0 0 24 24" width={20} xmlns="http://www.w3.org/2000/svg">
+                <path fill="#a855f7" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+              </svg>
+              <input 
+                type="text" 
+                name="username"
+                value={formData.username}
+                onChange={handleInputChange}
+                className="ml-3 rounded-xl border-none w-full h-full focus:outline-none bg-transparent text-purple-200 placeholder-purple-400" 
+                placeholder="Choose a username" 
+                required
               />
             </div>
           </div>
@@ -49,22 +148,29 @@ export default function SignupForm() {
               </svg>
               <input 
                 type="email" 
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
                 className="ml-3 rounded-xl border-none w-full h-full focus:outline-none bg-transparent text-purple-200 placeholder-purple-400" 
                 placeholder="Enter your email" 
+                required
               />
             </div>
           </div>
 
           <div className="flex flex-col">
-            <label className="text-purple-300 font-semibold mb-2">LeetCode Username</label>
+            <label className="text-purple-300 font-semibold mb-2">LeetCode Username (Optional)</label>
             <div className="border-2 border-purple-500 bg-gray-800 rounded-xl h-12 flex items-center px-3 transition-colors focus-within:border-purple-400">
               <svg height={20} viewBox="0 0 24 24" width={20} xmlns="http://www.w3.org/2000/svg">
                 <path fill="#a855f7" d="M13.483 0a1.374 1.374 0 0 0-.961.438L7.116 6.226l-3.854 4.126a5.266 5.266 0 0 0-1.209 2.104 5.35 5.35 0 0 0-.125.513 5.527 5.527 0 0 0 .062 2.362 5.83 5.83 0 0 0 .349 1.017 5.938 5.938 0 0 0 1.271 1.818l4.277 4.193.039.038c2.248 2.165 5.818 2.133 8.022-.074l2.957-2.957A1.375 1.375 0 0 0 17.5 15.5L15.544 17.456a2.542 2.542 0 0 1-3.804-.032L7.462 13.15a2.543 2.543 0 0 1-.032-3.804L9.388 7.388a2.542 2.542 0 0 1 3.804.032l4.278 4.274a2.543 2.543 0 0 1 .032 3.804L15.544 17.456a1.375 1.375 0 0 0 1.956 1.956l1.958-1.956c2.207-2.206 2.239-5.777.074-8.022L15.255 5.157a5.828 5.828 0 0 0-1.818-1.271 5.938 5.938 0 0 0-1.017-.349 5.527 5.527 0 0 0-2.362-.062 5.35 5.35 0 0 0-.513.125 5.266 5.266 0 0 0-2.104 1.209L3.315 8.935a1.374 1.374 0 0 0 1.956 1.956L9.388 6.774a2.542 2.542 0 0 1 3.804.032l4.278 4.274a2.543 2.543 0 0 1 .032 3.804l-1.958 1.956a1.375 1.375 0 0 0 1.956 1.956l1.958-1.956c2.207-2.206 2.239-5.777.074-8.022z"/>
               </svg>
               <input 
                 type="text" 
+                name="leetcodeUsername"
+                value={formData.leetcodeUsername}
+                onChange={handleInputChange}
                 className="ml-3 rounded-xl border-none w-full h-full focus:outline-none bg-transparent text-purple-200 placeholder-purple-400" 
-                placeholder="leetcode username" 
+                placeholder="LeetCode username (optional)" 
               />
             </div>
           </div>
@@ -77,13 +183,23 @@ export default function SignupForm() {
                 <path fill="#a855f7" d="m304 224c-8.832031 0-16-7.167969-16-16v-80c0-52.929688-43.070312-96-96-96s-96 43.070312-96 96v80c0 8.832031-7.167969 16-16 16s-16-7.167969-16-16v-80c0-70.59375 57.40625-128 128-128s128 57.40625 128 128v80c0 8.832031-7.167969 16-16 16zm0 0" />
               </svg>
               <input 
-                type="password" 
+                type={showPassword ? "text" : "password"}
+                name="password"
+                value={formData.password}
+                onChange={handleInputChange}
                 className="ml-3 rounded-xl border-none w-full h-full focus:outline-none bg-transparent text-purple-200 placeholder-purple-400" 
                 placeholder="Create a password" 
+                required
               />
-              <svg viewBox="0 0 576 512" height="1em" xmlns="http://www.w3.org/2000/svg">
-                <path fill="#a855f7" d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM144 256a144 144 0 1 1 288 0 144 144 0 1 1 -288 0zm144-64c0 35.3-28.7 64-64 64c-7.1 0-13.9-1.2-20.3-3.3c-5.5-1.8-11.9 1.6-11.7 7.4c.3 6.9 1.3 13.8 3.2 20.7c13.7 51.2 66.4 81.6 117.6 67.9s81.6-66.4 67.9-117.6c-11.1-41.5-47.8-69.4-88.6-71.1c-5.8-.2-9.2 6.1-7.4 11.7c2.1 6.4 3.3 13.2 3.3 20.3z" />
-              </svg>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="ml-2 focus:outline-none"
+              >
+                <svg viewBox="0 0 576 512" height="1em" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="#a855f7" d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM144 256a144 144 0 1 1 288 0 144 144 0 1 1 -288 0zm144-64c0 35.3-28.7 64-64 64c-7.1 0-13.9-1.2-20.3-3.3c-5.5-1.8-11.9 1.6-11.7 7.4c.3 6.9 1.3 13.8 3.2 20.7c13.7 51.2 66.4 81.6 117.6 67.9s81.6-66.4 67.9-117.6c-11.1-41.5-47.8-69.4-88.6-71.1c-5.8-.2-9.2 6.1-7.4 11.7c2.1 6.4 3.3 13.2 3.3 20.3z" />
+                </svg>
+              </button>
             </div>
           </div>
 
@@ -95,32 +211,48 @@ export default function SignupForm() {
                 <path fill="#a855f7" d="m304 224c-8.832031 0-16-7.167969-16-16v-80c0-52.929688-43.070312-96-96-96s-96 43.070312-96 96v80c0 8.832031-7.167969 16-16 16s-16-7.167969-16-16v-80c0-70.59375 57.40625-128 128-128s128 57.40625 128 128v80c0 8.832031-7.167969 16-16 16zm0 0" />
               </svg>
               <input 
-                type="password" 
+                type={showConfirmPassword ? "text" : "password"}
+                name="confirmPassword"
+                value={formData.confirmPassword}
+                onChange={handleInputChange}
                 className="ml-3 rounded-xl border-none w-full h-full focus:outline-none bg-transparent text-purple-200 placeholder-purple-400" 
                 placeholder="Confirm your password" 
+                required
               />
-              <svg height={20} viewBox="0 0 24 24" width={20} xmlns="http://www.w3.org/2000/svg">
-                <path fill="#a855f7" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-              </svg>
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="ml-2 focus:outline-none"
+              >
+                <svg height={20} viewBox="0 0 24 24" width={20} xmlns="http://www.w3.org/2000/svg">
+                  <path fill="#a855f7" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+              </button>
             </div>
           </div>
 
           <div className="flex flex-row items-center justify-between gap-4 my-2">
             <div className="flex items-center">
-              <input type="checkbox" className="mr-2 accent-purple-500" />
+              <input 
+                type="checkbox" 
+                checked={agreeToTerms}
+                onChange={(e) => setAgreeToTerms(e.target.checked)}
+                className="mr-2 accent-purple-500" 
+              />
               <label className="text-sm text-purple-300">I agree to the Terms & Conditions</label>
             </div>
           </div>
 
           <button 
             type="submit"
-            className="mt-4 mb-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-xl h-12 w-full cursor-pointer transition-colors"
+            disabled={isLoading}
+            className="mt-4 mb-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl h-12 w-full cursor-pointer transition-colors"
           >
-            Create Account
+            {isLoading ? 'Creating Account...' : 'Create Account'}
           </button>
 
           <p className="text-center text-purple-300 text-sm my-2">
-            Already have an account? <span className="text-purple-400 font-medium cursor-pointer hover:text-purple-200">Sign In</span>
+            Already have an account? <Link href="/login" className="text-purple-400 font-medium cursor-pointer hover:text-purple-200">Sign In</Link>
           </p>
           
           <p className="text-center text-purple-300 text-sm my-2">Or Sign Up With</p>
