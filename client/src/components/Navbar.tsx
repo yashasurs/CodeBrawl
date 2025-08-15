@@ -5,9 +5,10 @@ import { usePathname } from 'next/navigation';
 
 interface NavbarProps {
   showAuthButtons?: boolean;
+  pageTitle?: string;
 }
 
-export default function Navbar({ showAuthButtons = true }: NavbarProps) {
+export default function Navbar({ showAuthButtons = true, pageTitle }: NavbarProps) {
   const pathname = usePathname();
 
   const isActive = (path: string) => pathname === path;
@@ -33,25 +34,32 @@ export default function Navbar({ showAuthButtons = true }: NavbarProps) {
       
       {/* Navigation Routes */}
       {!showAuthButtons && (
-        <div className="flex items-center space-x-1 bg-black/30 backdrop-blur-sm rounded-xl p-1 border border-purple-600/30">
-          {[
-            { href: '/battle', label: 'Battle' },
-            { href: '/practice', label: 'Practice' },
-            { href: '/leaderboard', label: 'Leaderboard' },
-            { href: '/profile', label: 'Profile' }
-          ].map((route) => (
-            <Link 
-              key={route.href}
-              href={route.href} 
-              className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
-                isActive(route.href)
-                  ? 'bg-purple-600 text-white'
-                  : 'text-purple-300 hover:text-white hover:bg-purple-600/30'
-              }`}
-            >
-              {route.label}
-            </Link>
-          ))}
+        <div className="flex items-center space-x-6">
+          {pageTitle && (
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-white bg-clip-text text-transparent">
+              {pageTitle}
+            </h1>
+          )}
+          <div className="flex items-center space-x-1 bg-black/30 backdrop-blur-sm rounded-xl p-1 border border-purple-600/30">
+            {[
+              { href: '/battle', label: 'Battle' },
+              { href: '/practice', label: 'Practice' },
+              { href: '/leaderboard', label: 'Leaderboard' },
+              { href: '/profile', label: 'Profile' }
+            ].map((route) => (
+              <Link 
+                key={route.href}
+                href={route.href} 
+                className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                  isActive(route.href)
+                    ? 'bg-purple-600 text-white'
+                    : 'text-purple-300 hover:text-white hover:bg-purple-600/30'
+                }`}
+              >
+                {route.label}
+              </Link>
+            ))}
+          </div>
         </div>
       )}
       
