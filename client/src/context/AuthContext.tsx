@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import axios from 'axios';
 
 // Types
 export interface User {
@@ -15,15 +16,75 @@ export interface User {
   wins: number;
   losses: number;
   winStreak: number;
+  longestWinStreak: number;
+  practiceProblemsSolved: number;
+  country: string;
+  tier: string;
+  globalRank?: number;
   isOnline: boolean;
   lastActive: Date;
-  achievements: string[];
+  achievements: Achievement[];
+  languageStats: LanguageStat[];
+  practiceStats: PracticeStats;
+  preferredLanguage: string;
   createdAt: Date;
   updatedAt: Date;
+  // Virtual fields
+  winRate: number;
+  favoriteLanguage: string;
+}
+
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  unlocked: boolean;
+  unlockedAt?: Date;
+}
+
+export interface LanguageStat {
+  language: string;
+  problemsSolved: number;
+  timeSpent: number;
+}
+
+export interface PracticeStats {
+  easy: {
+    solved: number;
+    total: number;
+    percentage?: number;
+  };
+  medium: {
+    solved: number;
+    total: number;
+    percentage?: number;
+  };
+  hard: {
+    solved: number;
+    total: number;
+    percentage?: number;
+  };
+}
+
+export interface Match {
+  id: string;
+  opponent: string;
+  result: 'Win' | 'Loss';
+  eloChange: number;
+  date: Date;
+  problem: string;
+  duration: number;
+}
+
+export interface DetailedUser extends User {
+  recentMatches: Match[];
+  practiceStatsWithPercentages: PracticeStats;
 }
 
 export interface AuthContextType {
   user: User | null;
+  detailedUser: DetailedUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (fullName: string, email: string, username: string, password: string, leetcodeUsername?: string) => Promise<void>;
@@ -31,6 +92,7 @@ export interface AuthContextType {
   updateUser: (userData: Partial<User>) => Promise<void>;
   refreshUser: () => Promise<void>;
   updateEloRating: () => Promise<void>;
+  getDetailedProfile: () => Promise<DetailedUser>;
 }
 
 interface AuthProviderProps {
@@ -43,6 +105,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Auth Provider Component
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
+  const [detailedUser, setDetailedUser] = useState<DetailedUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -54,18 +117,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const checkAuth = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/users/current-user`, {
-        method: 'GET',
-        credentials: 'include',
+      const { data } = await axios.get(`${API_URL}/api/v1/auth/current-user`, {
+        withCredentials: true,
         headers: {
           'Content-Type': 'application/json',
         },
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.data);
-      }
+      setUser(data.data);
     } catch (error) {
       console.error('Auth check failed:', error);
     } finally {
@@ -75,21 +133,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/users/login`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
-      }
-
+      const { data } = await axios.post(
+        `${API_URL}/api/v1/auth/login`,
+        { email, password },
+        {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
       setUser(data.data.user);
     } catch (error) {
       console.error('Login error:', error);
@@ -105,27 +158,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     leetcodeUsername?: string
   ) => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/users/register`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const { data } = await axios.post(
+        `${API_URL}/api/v1/auth/register`,
+        {
           fullName,
           email,
           username,
           password,
           leetcodeUsername,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Registration failed');
-      }
-
+        },
+        {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
       // Auto-login after successful registration
       await login(email, password);
     } catch (error) {
@@ -136,14 +184,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const logout = async () => {
     try {
-      await fetch(`${API_URL}/api/v1/users/logout`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
+      await axios.post(
+        `${API_URL}/api/v1/auth/logout`,
+        {},
+        {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
       setUser(null);
     } catch (error) {
       console.error('Logout error:', error);
@@ -153,21 +203,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const updateUser = async (userData: Partial<User>) => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/users/update-account`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Update failed');
-      }
-
+      const { data } = await axios.patch(
+        `${API_URL}/api/v1/auth/update-account`,
+        userData,
+        {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
       setUser(data.data);
     } catch (error) {
       console.error('Update error:', error);
@@ -177,18 +222,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const refreshUser = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/users/current-user`, {
-        method: 'GET',
-        credentials: 'include',
+      const { data } = await axios.get(`${API_URL}/api/v1/auth/current-user`, {
+        withCredentials: true,
         headers: {
           'Content-Type': 'application/json',
         },
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.data);
-      }
+      setUser(data.data);
     } catch (error) {
       console.error('Refresh user error:', error);
     }
@@ -196,20 +236,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const updateEloRating = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/users/update-elo`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'ELO update failed');
-      }
-
+      await axios.patch(
+        `${API_URL}/api/v1/auth/update-elo`,
+        {},
+        {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
       // Refresh user data after ELO update
       await refreshUser();
     } catch (error) {
@@ -218,8 +254,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  const getDetailedProfile = async (): Promise<DetailedUser> => {
+    try {
+      const { data } = await axios.get(`${API_URL}/api/v1/auth/detailed-profile`, {
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      const detailedProfile = data.data;
+      setDetailedUser(detailedProfile);
+      return detailedProfile;
+    } catch (error) {
+      console.error('Detailed profile error:', error);
+      throw error;
+    }
+  };
+
   const value: AuthContextType = {
     user,
+    detailedUser,
     loading,
     login,
     register,
@@ -227,6 +281,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     updateUser,
     refreshUser,
     updateEloRating,
+    getDetailedProfile,
   };
 
   return (

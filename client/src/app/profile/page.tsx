@@ -7,50 +7,110 @@ import OverviewTab from '@/components/profile/OverviewTab';
 import MatchesTab from '@/components/profile/MatchesTab';
 import AchievementsTab from '@/components/profile/AchievementsTab';
 import StatisticsTab from '@/components/profile/StatisticsTab';
-import { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState('overview');
+  const [profileData, setProfileData] = useState<any>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const { user, loading, getDetailedProfile } = useAuth();
+  const router = useRouter();
 
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
+  // Fetch detailed profile data
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      if (user && !loading) {
+        try {
+          setProfileLoading(true);
+          const detailedData = await getDetailedProfile();
+          setProfileData(detailedData);
+        } catch (error) {
+          console.error('Error fetching profile data:', error);
+        } finally {
+          setProfileLoading(false);
+        }
+      }
+    };
+
+    fetchProfileData();
+  }, [user, loading, getDetailedProfile]);
+
+  // Show loading while checking authentication or fetching profile
+  if (loading || profileLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-white text-xl">Loading profile...</div>
+      </div>
+    );
+  }
+
+  // Don't render anything if user is not authenticated
+  if (!user || !profileData) {
+    return null;
+  }
+
+  // Use real profile data from backend
   const userData = {
-    username: "CodeWarrior",
-    elo: 1456,
-    rank: 11,
-    joinedDate: "March 2024",
-    country: "🇺🇸",
-    badge: "⚡",
-    tier: "Specialist",
-    wins: 32,
-    losses: 24,
-    totalBattles: 56,
-    winRate: 57.1,
-    currentStreak: 0,
-    longestStreak: 7,
-    totalProblemsSolved: 127,
-    favoriteLanguage: "JavaScript"
+    username: profileData.username,
+    elo: profileData.eloRating,
+    rank: profileData.globalRank || 1,
+    joinedDate: new Date(profileData.createdAt).toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long' 
+    }),
+    country: profileData.country || "🌍",
+    badge: getBadgeForTier(profileData.tier),
+    tier: profileData.tier || "Novice",
+    wins: profileData.wins,
+    losses: profileData.losses,
+    totalBattles: profileData.totalMatches,
+    winRate: profileData.winRate,
+    currentStreak: profileData.winStreak || 0,
+    longestStreak: profileData.longestWinStreak || 0,
+    totalProblemsSolved: profileData.practiceProblemsSolved || 0,
+    favoriteLanguage: profileData.favoriteLanguage || profileData.preferredLanguage || "C++"
   };
 
-  const recentMatches = [
-    { id: 1, opponent: "AlgoNinja", result: "Loss", eloChange: -15, date: "2 hours ago", problem: "Binary Tree Traversal" },
-    { id: 2, opponent: "CodeMaster", result: "Win", eloChange: +18, date: "1 day ago", problem: "Two Sum Variant" },
-    { id: 3, opponent: "ByteWarrior", result: "Win", eloChange: +16, date: "2 days ago", problem: "Maximum Subarray" },
-    { id: 4, opponent: "DevGuru", result: "Loss", eloChange: -14, date: "3 days ago", problem: "Longest Palindrome" },
-    { id: 5, opponent: "JSWizard", result: "Win", eloChange: +17, date: "4 days ago", problem: "Merge Intervals" }
-  ];
+  // Helper function to get badge emoji based on tier
+  function getBadgeForTier(tier: string): string {
+    switch (tier) {
+      case 'Novice': return '🌱';
+      case 'Apprentice': return '⚡';
+      case 'Specialist': return '🔥';
+      case 'Expert': return '💎';
+      case 'Master': return '👑';
+      case 'Grandmaster': return '🏆';
+      default: return '⚡';
+    }
+  }
 
-  const achievements = [
-    { id: 1, title: "First Victory", description: "Win your first battle", icon: "🏆", unlocked: true },
-    { id: 2, title: "Speed Demon", description: "Solve a problem in under 5 minutes", icon: "⚡", unlocked: true },
-    { id: 3, title: "Streak Master", description: "Win 5 battles in a row", icon: "🔥", unlocked: true },
-    { id: 4, title: "Problem Solver", description: "Solve 100 practice problems", icon: "🧩", unlocked: true },
-    { id: 5, title: "Giant Slayer", description: "Defeat someone 200+ ELO higher", icon: "⚔️", unlocked: false },
-    { id: 6, title: "Perfectionist", description: "Win 10 battles without any wrong submissions", icon: "💎", unlocked: false }
-  ];
+  // Use real match data from backend
+  const recentMatches = profileData.recentMatches.map((match: any) => ({
+    id: match.id,
+    opponent: match.opponent,
+    result: match.result,
+    eloChange: match.eloChange,
+    date: new Date(match.date).toLocaleDateString(),
+    problem: match.problem
+  }));
 
-  const solvingStats = {
-    easy: { solved: 45, total: 60, percentage: 75 },
-    medium: { solved: 52, total: 80, percentage: 65 },
-    hard: { solved: 30, total: 70, percentage: 43 }
+  // Use real achievements from backend
+  const achievements = profileData.achievements;
+
+  // Use real practice stats from backend
+  const solvingStats = profileData.practiceStats || {
+    easy: { solved: 0, total: 60, percentage: 0 },
+    medium: { solved: 0, total: 80, percentage: 0 },
+    hard: { solved: 0, total: 70, percentage: 0 }
   };
 
   const renderTabContent = () => {

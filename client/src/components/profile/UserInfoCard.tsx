@@ -1,3 +1,7 @@
+import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+
 interface UserInfoCardProps {
   username: string;
   elo: number;
@@ -21,9 +25,23 @@ export default function UserInfoCard({
   wins, 
   winRate 
 }: UserInfoCardProps) {
-  const handleLogout = () => {
-    // Add logout logic here
-    console.log('Logging out...');
+  const { logout } = useAuth();
+  const router = useRouter();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    
+    try {
+      setIsLoggingOut(true);
+      await logout();
+      router.push('/'); // Redirect to home page after logout
+    } catch (error) {
+      console.error('Failed to logout:', error);
+      alert('Failed to logout. Please try again.');
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -31,9 +49,12 @@ export default function UserInfoCard({
       {/* Logout Button */}
       <button 
         onClick={handleLogout}
-        className="absolute top-6 right-6 px-4 py-2 border border-red-500/70 text-red-400 hover:bg-red-600/20 hover:text-red-300 rounded-lg font-medium transition-colors duration-200 text-sm"
+        disabled={isLoggingOut}
+        className={`absolute top-6 right-6 px-4 py-2 border border-red-500/70 text-red-400 hover:bg-red-600/20 hover:text-red-300 rounded-lg font-medium transition-colors duration-200 text-sm ${
+          isLoggingOut ? 'opacity-50 cursor-not-allowed' : ''
+        }`}
       >
-        Logout
+        {isLoggingOut ? 'Logging out...' : 'Logout'}
       </button>
 
       <div className="flex flex-col md:flex-row items-center md:items-start space-y-6 md:space-y-0 md:space-x-8 pr-20">

@@ -53,11 +53,19 @@ const userSchema = new Schema(
             type: Number,
             default: 0
         },
-        matchesWon: {
+        wins: {
             type: Number,
             default: 0
         },
-        matchesLost: {
+        losses: {
+            type: Number,
+            default: 0
+        },
+        winStreak: {
+            type: Number,
+            default: 0
+        },
+        longestWinStreak: {
             type: Number,
             default: 0
         },
@@ -65,14 +73,80 @@ const userSchema = new Schema(
             type: Number,
             default: 0
         },
-        badges: [{
-            name: String,
+        practiceProblemsSolved: {
+            type: Number,
+            default: 0
+        },
+        country: {
+            type: String,
+            default: "🌍"
+        },
+        tier: {
+            type: String,
+            default: "Novice",
+            enum: ["Novice", "Apprentice", "Specialist", "Expert", "Master", "Grandmaster"]
+        },
+        globalRank: {
+            type: Number,
+            default: null
+        },
+        achievements: [{
+            id: String,
+            title: String,
             description: String,
-            earnedAt: {
+            icon: String,
+            unlocked: {
+                type: Boolean,
+                default: false
+            },
+            unlockedAt: {
                 type: Date,
-                default: Date.now
+                default: null
             }
         }],
+        languageStats: [{
+            language: String,
+            problemsSolved: {
+                type: Number,
+                default: 0
+            },
+            timeSpent: {
+                type: Number,
+                default: 0
+            }
+        }],
+        practiceStats: {
+            easy: {
+                solved: {
+                    type: Number,
+                    default: 0
+                },
+                total: {
+                    type: Number,
+                    default: 60
+                }
+            },
+            medium: {
+                solved: {
+                    type: Number,
+                    default: 0
+                },
+                total: {
+                    type: Number,
+                    default: 80
+                }
+            },
+            hard: {
+                solved: {
+                    type: Number,
+                    default: 0
+                },
+                total: {
+                    type: Number,
+                    default: 70
+                }
+            }
+        },
         preferredLanguage: {
             type: String,
             default: "cpp",
@@ -176,16 +250,61 @@ userSchema.methods.updateEloFromLeetCode = async function() {
 // Calculate win rate
 userSchema.virtual('winRate').get(function() {
     if (this.totalMatches === 0) return 0;
-    return ((this.matchesWon / this.totalMatches) * 100).toFixed(2);
+    return Math.round((this.wins / this.totalMatches) * 100);
 });
 
-// Calculate rank based on ELO rating
-userSchema.virtual('rank').get(function() {
-    if (this.eloRating < 1000) return 'Bronze';
-    if (this.eloRating < 1300) return 'Silver';
-    if (this.eloRating < 1600) return 'Gold';
-    if (this.eloRating < 1900) return 'Platinum';
-    return 'Diamond';
+// Calculate tier based on ELO rating
+userSchema.virtual('calculatedTier').get(function() {
+    if (this.eloRating < 800) return 'Novice';
+    if (this.eloRating < 1200) return 'Apprentice';
+    if (this.eloRating < 1600) return 'Specialist';
+    if (this.eloRating < 2000) return 'Expert';
+    if (this.eloRating < 2400) return 'Master';
+    return 'Grandmaster';
 });
+
+// Get favorite programming language
+userSchema.virtual('favoriteLanguage').get(function() {
+    if (!this.languageStats || this.languageStats.length === 0) {
+        return this.preferredLanguage || 'cpp';
+    }
+    
+    const mostUsed = this.languageStats.reduce((prev, current) => 
+        (prev.problemsSolved > current.problemsSolved) ? prev : current
+    );
+    
+    return mostUsed.language;
+});
+
+// Calculate practice stats percentages
+userSchema.virtual('practiceStatsWithPercentages').get(function() {
+    const stats = this.practiceStats || {
+        easy: { solved: 0, total: 60 },
+        medium: { solved: 0, total: 80 },
+        hard: { solved: 0, total: 70 }
+    };
+    
+    return {
+        easy: {
+            solved: stats.easy.solved,
+            total: stats.easy.total,
+            percentage: stats.easy.total > 0 ? Math.round((stats.easy.solved / stats.easy.total) * 100) : 0
+        },
+        medium: {
+            solved: stats.medium.solved,
+            total: stats.medium.total,
+            percentage: stats.medium.total > 0 ? Math.round((stats.medium.solved / stats.medium.total) * 100) : 0
+        },
+        hard: {
+            solved: stats.hard.solved,
+            total: stats.hard.total,
+            percentage: stats.hard.total > 0 ? Math.round((stats.hard.solved / stats.hard.total) * 100) : 0
+        }
+    };
+});
+
+// Ensure virtual fields are included in JSON output
+userSchema.set('toJSON', { virtuals: true });
+userSchema.set('toObject', { virtuals: true });
 
 export const User = mongoose.model("User", userSchema);

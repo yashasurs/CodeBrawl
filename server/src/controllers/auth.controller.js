@@ -2,6 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../models/User.model.js";
+import { Match } from "../models/Match.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
 
@@ -85,7 +86,8 @@ const loginUser = asyncHandler(async (req, res) => {
 
     const options = {
         httpOnly: true,
-        secure: true
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
     };
 
     return res
@@ -122,7 +124,8 @@ const logoutUser = asyncHandler(async (req, res) => {
 
     const options = {
         httpOnly: true,
-        secure: true
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
     };
 
     return res
@@ -157,7 +160,8 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
         const options = {
             httpOnly: true,
-            secure: true
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax'
         };
 
         const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
@@ -299,6 +303,103 @@ const updateEloRating = asyncHandler(async (req, res) => {
     }
 });
 
+const getDetailedProfile = asyncHandler(async (req, res) => {
+    const userId = req.user?._id;
+
+    if (!userId) {
+        throw new ApiError(401, "User not authenticated");
+    }
+
+    try {
+        // Get user data with virtual fields
+        const user = await User.findById(userId)
+            .select("-password -refreshToken")
+            .lean({ virtuals: true });
+
+        if (!user) {
+            throw new ApiError(404, "User not found");
+        }
+
+        // Get recent matches for this user
+        const recentMatches = await Match.find({
+            "participants.user": userId,
+            status: "completed"
+        })
+        .populate("participants.user", "username avatar")
+        .populate("problem", "title difficulty")
+        .populate("winner", "username")
+        .sort({ endTime: -1 })
+        .limit(10)
+        .lean();
+
+        // Format match history
+        const formattedMatches = recentMatches.map(match => {
+            const userParticipant = match.participants.find(p => 
+                p.user._id.toString() === userId.toString()
+            );
+            const opponent = match.participants.find(p => 
+                p.user._id.toString() !== userId.toString()
+            );
+            
+            const isWinner = match.winner && match.winner._id.toString() === userId.toString();
+            const eloChange = match.eloChanges?.find(e => 
+                e.user.toString() === userId.toString()
+            );
+
+            return {
+                id: match._id,
+                opponent: opponent ? opponent.user.username : "Unknown",
+                result: isWinner ? "Win" : "Loss",
+                eloChange: eloChange ? eloChange.change : 0,
+                date: match.endTime,
+                problem: match.problem ? match.problem.title : "Unknown Problem",
+                duration: match.actualDuration || 0
+            };
+        });
+
+        // Calculate global rank (simplified - in production, use proper ranking system)
+        const higherRatedUsers = await User.countDocuments({
+            eloRating: { $gt: user.eloRating }
+        });
+        const globalRank = higherRatedUsers + 1;
+
+        // Update user's global rank
+        await User.findByIdAndUpdate(userId, { globalRank });
+
+        // Prepare comprehensive profile data
+        const profileData = {
+            ...user,
+            globalRank,
+            recentMatches: formattedMatches,
+            tier: user.calculatedTier || user.tier || "Novice",
+            favoriteLanguage: user.favoriteLanguage || user.preferredLanguage || "cpp",
+            practiceStats: user.practiceStatsWithPercentages || {
+                easy: { solved: 0, total: 60, percentage: 0 },
+                medium: { solved: 0, total: 80, percentage: 0 },
+                hard: { solved: 0, total: 70, percentage: 0 }
+            },
+            // Ensure we have proper default achievements if none exist
+            achievements: user.achievements && user.achievements.length > 0 ? user.achievements : [
+                { id: 1, title: "First Steps", description: "Created your account", icon: "🚀", unlocked: true, unlockedAt: user.createdAt },
+                { id: 2, title: "First Victory", description: "Win your first battle", icon: "🏆", unlocked: user.wins > 0, unlockedAt: user.wins > 0 ? new Date() : null },
+                { id: 3, title: "Speed Demon", description: "Solve a problem in under 5 minutes", icon: "⚡", unlocked: false, unlockedAt: null },
+                { id: 4, title: "Streak Master", description: "Win 5 battles in a row", icon: "🔥", unlocked: user.winStreak >= 5, unlockedAt: user.winStreak >= 5 ? new Date() : null },
+                { id: 5, title: "Problem Solver", description: "Solve 100 practice problems", icon: "🧩", unlocked: user.practiceProblemsSolved >= 100, unlockedAt: user.practiceProblemsSolved >= 100 ? new Date() : null },
+                { id: 6, title: "Giant Slayer", description: "Defeat someone 200+ ELO higher", icon: "⚔️", unlocked: false, unlockedAt: null },
+                { id: 7, title: "Perfectionist", description: "Win 10 battles without any wrong submissions", icon: "💎", unlocked: false, unlockedAt: null }
+            ]
+        };
+
+        return res
+            .status(200)
+            .json(new ApiResponse(200, profileData, "Detailed profile fetched successfully"));
+
+    } catch (error) {
+        console.error("Error fetching detailed profile:", error);
+        throw new ApiError(500, error.message || "Failed to fetch profile data");
+    }
+});
+
 export {
     registerUser,
     loginUser,
@@ -309,5 +410,6 @@ export {
     updateAccountDetails,
     updateUserAvatar,
     getUserProfile,
-    updateEloRating
+    updateEloRating,
+    getDetailedProfile
 };
