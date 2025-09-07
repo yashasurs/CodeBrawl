@@ -2,6 +2,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import UserDropdown from './UserDropdown';
 
 interface NavbarProps {
   showAuthButtons?: boolean;
@@ -10,8 +12,14 @@ interface NavbarProps {
 
 export default function Navbar({ showAuthButtons = true, pageTitle }: NavbarProps) {
   const pathname = usePathname();
+  const { user, loading } = useAuth();
 
   const isActive = (path: string) => pathname === path;
+
+  // Determine what to show in the right section
+  const shouldShowAuthButtons = showAuthButtons && !user && !loading;
+  const shouldShowUserDropdown = !showAuthButtons && user && !loading;
+  const shouldShowNavigation = !showAuthButtons;
 
   return (
     <nav className="flex justify-between items-center px-8 py-4 backdrop-blur-sm bg-black/60 border-b border-purple-600/30">
@@ -33,7 +41,7 @@ export default function Navbar({ showAuthButtons = true, pageTitle }: NavbarProp
       </Link>
       
       {/* Navigation Routes */}
-      {!showAuthButtons && (
+      {shouldShowNavigation && (
         <div className="flex items-center space-x-6">
           {pageTitle && (
             <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-white bg-clip-text text-transparent">
@@ -44,8 +52,7 @@ export default function Navbar({ showAuthButtons = true, pageTitle }: NavbarProp
             {[
               { href: '/battle', label: 'Battle' },
               { href: '/practice', label: 'Practice' },
-              { href: '/leaderboard', label: 'Leaderboard' },
-              { href: '/profile', label: 'Profile' }
+              { href: '/leaderboard', label: 'Leaderboard' }
             ].map((route) => (
               <Link 
                 key={route.href}
@@ -63,8 +70,11 @@ export default function Navbar({ showAuthButtons = true, pageTitle }: NavbarProp
         </div>
       )}
       
+      {/* User Dropdown (for authenticated users) */}
+      {shouldShowUserDropdown && <UserDropdown />}
+      
       {/* Authentication Buttons */}
-      {showAuthButtons && (
+      {shouldShowAuthButtons && (
         <div className="flex space-x-3">
           <Link 
             href="/login" 

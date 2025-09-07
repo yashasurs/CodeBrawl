@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { notify } from '@/utils/notifications';
 import axios from 'axios';
 
 // Types
@@ -90,6 +91,7 @@ export interface AuthContextType {
   register: (fullName: string, email: string, username: string, password: string, leetcodeUsername?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (userData: Partial<User>) => Promise<void>;
+  updateAvatar: (file: File) => Promise<User>;
   refreshUser: () => Promise<void>;
   updateEloRating: () => Promise<void>;
   getDetailedProfile: () => Promise<DetailedUser>;
@@ -144,8 +146,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       );
       setUser(data.data.user);
-    } catch (error) {
+      notify.auth.loginSuccess(data.data.user.fullName);
+    } catch (error: any) {
       console.error('Login error:', error);
+      const errorMessage = error.response?.data?.message || 'Login failed. Please check your credentials.';
+      notify.auth.authError(errorMessage);
       throw error;
     }
   };
@@ -158,14 +163,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     leetcodeUsername?: string
   ) => {
     try {
-      const { data } = await axios.post(
+      console.log('Attempting registration with:', { fullName, email, username, password: '***', leetcodeUsername });
+      
+      const response = await axios.post(
         `${API_URL}/api/v1/auth/register`,
         {
           fullName,
           email,
           username,
           password,
-          leetcodeUsername,
+          leetcodeUsername: leetcodeUsername || undefined,
         },
         {
           withCredentials: true,
@@ -174,11 +181,27 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           },
         }
       );
+      
+      console.log('Registration successful:', response.data);
+      
+      notify.auth.registrationSuccess();
+      
       // Auto-login after successful registration
       await login(email, password);
-    } catch (error) {
-      console.error('Registration error:', error);
-      throw error;
+    } catch (error: any) {
+      console.error('Registration error details:', error);
+      console.error('Error response:', error.response);
+      
+      const errorMessage = error.response?.data?.message || 'Registration failed. Please try again.';
+      notify.auth.authError(errorMessage);
+      
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      } else if (error.message) {
+        throw new Error(error.message);
+      } else {
+        throw new Error('Registration failed. Please try again.');
+      }
     }
   };
 
@@ -195,8 +218,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       );
       setUser(null);
-    } catch (error) {
+      setDetailedUser(null);
+      notify.auth.logoutSuccess();
+    } catch (error: any) {
       console.error('Logout error:', error);
+      const errorMessage = error.response?.data?.message || 'Logout failed. Please try again.';
+      notify.auth.authError(errorMessage);
       throw error;
     }
   };
@@ -214,8 +241,37 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       );
       setUser(data.data);
-    } catch (error) {
+      notify.profile.updated();
+    } catch (error: any) {
       console.error('Update error:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to update profile.';
+      notify.error('Update Failed', errorMessage);
+      throw error;
+    }
+  };
+
+  const updateAvatar = async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      const { data } = await axios.patch(
+        `${API_URL}/api/v1/auth/avatar`,
+        formData,
+        {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+      setUser(data.data);
+      notify.success('Avatar Updated', 'Your profile picture has been updated successfully!');
+      return data.data;
+    } catch (error: any) {
+      console.error('Avatar update error:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to update avatar.';
+      notify.error('Avatar Update Failed', errorMessage);
       throw error;
     }
   };
@@ -248,13 +304,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       );
       // Refresh user data after ELO update
       await refreshUser();
-    } catch (error) {
+      notify.success('ELO Rating Updated', 'Your ELO rating has been synced with your LeetCode profile.');
+    } catch (error: any) {
       console.error('ELO update error:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to update ELO rating.';
+      notify.error('ELO Update Failed', errorMessage);
       throw error;
     }
   };
 
-  const getDetailedProfile = async (): Promise<DetailedUser> => {
+  const getDetailedProfile = useCallback(async (): Promise<DetailedUser> => {
     try {
       const { data } = await axios.get(`${API_URL}/api/v1/auth/detailed-profile`, {
         withCredentials: true,
@@ -265,11 +324,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const detailedProfile = data.data;
       setDetailedUser(detailedProfile);
       return detailedProfile;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Detailed profile error:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to load profile data.';
+      notify.error('Profile Load Failed', errorMessage);
       throw error;
     }
-  };
+  }, [API_URL]);
 
   const value: AuthContextType = {
     user,
@@ -279,6 +340,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     register,
     logout,
     updateUser,
+    updateAvatar,
     refreshUser,
     updateEloRating,
     getDetailedProfile,

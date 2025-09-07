@@ -29,20 +29,26 @@ export default function ProfilePage() {
   useEffect(() => {
     const fetchProfileData = async () => {
       if (user && !loading) {
+        console.log('Starting to fetch profile data for user:', user.username);
         try {
           setProfileLoading(true);
           const detailedData = await getDetailedProfile();
+          console.log('Profile data fetched successfully:', detailedData);
           setProfileData(detailedData);
         } catch (error) {
           console.error('Error fetching profile data:', error);
+          // Set fallback data to prevent crashes
+          setProfileData(null);
         } finally {
           setProfileLoading(false);
         }
+      } else {
+        console.log('Not fetching profile data. User:', !!user, 'Loading:', loading);
       }
     };
 
     fetchProfileData();
-  }, [user, loading, getDetailedProfile]);
+  }, [user?._id, loading, getDetailedProfile]); // Now it's safe to include getDetailedProfile
 
   // Show loading while checking authentication or fetching profile
   if (loading || profileLoading) {
@@ -54,8 +60,34 @@ export default function ProfilePage() {
   }
 
   // Don't render anything if user is not authenticated
-  if (!user || !profileData) {
+  if (!user) {
     return null;
+  }
+
+  // Show loading while fetching profile data
+  if (profileLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-white text-xl">Loading profile...</div>
+      </div>
+    );
+  }
+
+  // If profile data failed to load, show error or fallback
+  if (!profileData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-400 text-xl mb-4">Failed to load profile data</div>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // Use real profile data from backend
@@ -94,23 +126,35 @@ export default function ProfilePage() {
   }
 
   // Use real match data from backend
-  const recentMatches = profileData.recentMatches.map((match: any) => ({
+  const recentMatches = (profileData.recentMatches || []).map((match: any) => ({
     id: match.id,
-    opponent: match.opponent,
-    result: match.result,
-    eloChange: match.eloChange,
-    date: new Date(match.date).toLocaleDateString(),
-    problem: match.problem
+    opponent: match.opponent || "Unknown",
+    result: match.result || "Unknown",
+    eloChange: match.eloChange || 0,
+    date: match.date ? new Date(match.date).toLocaleDateString() : "Unknown",
+    problem: match.problem || "Unknown Problem"
   }));
 
   // Use real achievements from backend
-  const achievements = profileData.achievements;
+  const achievements = profileData.achievements || [];
 
-  // Use real practice stats from backend
-  const solvingStats = profileData.practiceStats || {
-    easy: { solved: 0, total: 60, percentage: 0 },
-    medium: { solved: 0, total: 80, percentage: 0 },
-    hard: { solved: 0, total: 70, percentage: 0 }
+  // Use real practice stats from backend with fallbacks
+  const solvingStats = {
+    easy: {
+      solved: profileData.practiceStats?.easy?.solved || 0,
+      total: profileData.practiceStats?.easy?.total || 60,
+      percentage: profileData.practiceStats?.easy?.percentage || 0
+    },
+    medium: {
+      solved: profileData.practiceStats?.medium?.solved || 0,
+      total: profileData.practiceStats?.medium?.total || 80,
+      percentage: profileData.practiceStats?.medium?.percentage || 0
+    },
+    hard: {
+      solved: profileData.practiceStats?.hard?.solved || 0,
+      total: profileData.practiceStats?.hard?.total || 70,
+      percentage: profileData.practiceStats?.hard?.percentage || 0
+    }
   };
 
   const renderTabContent = () => {

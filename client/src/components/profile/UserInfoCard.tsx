@@ -1,6 +1,7 @@
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import Avatar from '../Avatar';
 
 interface UserInfoCardProps {
   username: string;
@@ -25,7 +26,7 @@ export default function UserInfoCard({
   wins, 
   winRate 
 }: UserInfoCardProps) {
-  const { logout } = useAuth();
+  const { logout, user, updateAvatar } = useAuth();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -38,9 +39,18 @@ export default function UserInfoCard({
       router.push('/'); // Redirect to home page after logout
     } catch (error) {
       console.error('Failed to logout:', error);
-      alert('Failed to logout. Please try again.');
+      // Error notification is now handled in AuthContext
     } finally {
       setIsLoggingOut(false);
+    }
+  };
+
+  const handleAvatarChange = async (file: File) => {
+    try {
+      await updateAvatar(file);
+    } catch (error) {
+      console.error('Avatar upload error:', error);
+      // Error notification is handled in AuthContext
     }
   };
 
@@ -60,8 +70,15 @@ export default function UserInfoCard({
       <div className="flex flex-col md:flex-row items-center md:items-start space-y-6 md:space-y-0 md:space-x-8 pr-20">
         {/* Avatar and Basic Info */}
         <div className="text-center md:text-left">
-          <div className="w-32 h-32 bg-purple-600 rounded-full flex items-center justify-center text-6xl mb-4 mx-auto md:mx-0">
-            {badge}
+          <div className="mx-auto md:mx-0 mb-4">
+            <Avatar
+              src={user?.avatar}
+              alt={username}
+              username={username}
+              size="xl"
+              showEdit={true}
+              onAvatarChange={handleAvatarChange}
+            />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">{username}</h1>
           <div className="flex items-center justify-center md:justify-start space-x-2 mb-2">

@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import BackgroundAnimation from "../components/BackgroundAnimation";
 import { AuthProvider } from "../context/AuthContext";
+import ToasterProvider from "../components/ToasterProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,6 +40,9 @@ export default function RootLayout({
             <div className="relative z-10">
               {children}
             </div>
+
+            {/* Toast Notifications */}
+            <ToasterProvider />
           </div>
         </AuthProvider>
       </body>

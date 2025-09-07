@@ -83,8 +83,7 @@ const userSchema = new Schema(
         },
         tier: {
             type: String,
-            default: "Novice",
-            enum: ["Novice", "Apprentice", "Specialist", "Expert", "Master", "Grandmaster"]
+            default: "Novice"
         },
         globalRank: {
             type: Number,
@@ -149,8 +148,7 @@ const userSchema = new Schema(
         },
         preferredLanguage: {
             type: String,
-            default: "cpp",
-            enum: ["javascript", "python", "java", "cpp", "c"]
+            default: "cpp"
         },
         isOnline: {
             type: Boolean,
