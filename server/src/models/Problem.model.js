@@ -17,6 +17,17 @@ const testCaseSchema = new Schema({
 
 const problemSchema = new Schema(
     {
+        // LeetCode identifiers
+        leetcodeId: {
+            type: String, // Changed from Number to String to match questionFrontendId
+            unique: true,
+            sparse: true,
+            index: true
+        },
+        titleSlug: {
+            type: String,
+            index: true
+        },
         title: {
             type: String,
             required: true,

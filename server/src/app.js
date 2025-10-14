@@ -16,8 +16,14 @@ app.use(cookieParser())
 
 import authRouter from './routes/auth.routes.js'
 import userRouter from './routes/user.routes.js'
+import problemRouter from './routes/problem.routes.js'
+import duelRouter from './routes/duel.routes.js'
+import submissionRouter from './routes/submission.routes.js'
 
 app.use("/api/v1/auth", authRouter)
 app.use("/api/v1/users", userRouter)
+app.use("/api/v1/problems", problemRouter)
+app.use("/api/v1/duels", duelRouter)
+app.use("/api/v1/submissions", submissionRouter)
 
 export { app }
