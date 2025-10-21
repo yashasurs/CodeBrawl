@@ -28,6 +28,14 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Convert relative path to absolute if needed
+        if not self.LEETCODE_DATASET_PATH.startswith('/') and not self.LEETCODE_DATASET_PATH[1:3] == ':\\':
+            import os
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            self.LEETCODE_DATASET_PATH = os.path.join(base_dir, self.LEETCODE_DATASET_PATH)
 
 
 settings = Settings()

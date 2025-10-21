@@ -1,6 +1,6 @@
 """LangGraph workflow for problem generation."""
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, END
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class ProblemGenerationState(BaseModel):
     """State for problem generation workflow."""
-    leetcode_id: str = None  # Changed to string to match questionFrontendId
+    leetcode_id: Optional[str] = None  # Changed to string to match questionFrontendId
     title: str = ""
     title_slug: str = ""
     original_statement: str = ""
@@ -44,7 +44,7 @@ class ProblemGenerationWorkflow:
     
     def __init__(self):
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-pro",
+            model="gemini-1.5-pro",
             google_api_key=settings.GOOGLE_API_KEY,
             temperature=0.3
         )
@@ -194,9 +194,9 @@ class ProblemGenerationWorkflow:
             Constraints: {state.constraints}
             
             Generate test cases including:
-            - 2-3 example cases (simple, medium complexity)
-            - 1-2 edge cases (boundary conditions)
-            - 1 complex case
+            - 10-15 example cases (simple, medium complexity)
+            - 10-15 edge cases (boundary conditions)
+            - 20 complex case
             
             Return as JSON array:
             [
@@ -248,7 +248,7 @@ class ProblemGenerationWorkflow:
         """Generate a competitive programming problem."""
         initial_state = ProblemGenerationState(
             leetcode_id=leetcode_id,
-            title=title,
+            title=title or "",
             difficulty=difficulty or ""
         )
         
