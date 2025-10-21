@@ -34,6 +34,11 @@ class ProblemGenerationState(BaseModel):
     memory_limit: int = 0
     scoring_weight: int = 1
     
+    # Boilerplate generation with multi-language support
+    language: str = ""  # Current programming language
+    boilerplate_code: str = ""  # Current boilerplate code
+    boilerplate_cache: Dict[str, str] = {}  # Cache for all generated boilerplates {language: code}
+    
     # Workflow control
     error: str = ""
     completed: bool = False
@@ -44,7 +49,7 @@ class ProblemGenerationWorkflow:
     
     def __init__(self):
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-pro",
+            model="gemini-pro",
             google_api_key=settings.GOOGLE_API_KEY,
             temperature=0.3
         )
@@ -58,13 +63,15 @@ class ProblemGenerationWorkflow:
         workflow.add_node("retrieve_problem", self.retrieve_problem)
         workflow.add_node("format_problem", self.format_problem)
         workflow.add_node("generate_testcases", self.generate_testcases)
+        workflow.add_node("generate_boilerplate", self.generate_boilerplate)
         workflow.add_node("finalize", self.finalize)
         
         # Add edges
         workflow.set_entry_point("retrieve_problem")
         workflow.add_edge("retrieve_problem", "format_problem")
         workflow.add_edge("format_problem", "generate_testcases")
-        workflow.add_edge("generate_testcases", "finalize")
+        workflow.add_edge("generate_testcases", "generate_boilerplate")
+        workflow.add_edge("generate_boilerplate", "finalize")
         workflow.add_edge("finalize", END)
         
         return workflow.compile()
@@ -237,6 +244,88 @@ class ProblemGenerationWorkflow:
             logger.error(f"Error generating test cases: {e}")
             return {"error": f"Failed to generate test cases: {str(e)}"}
     
+    async def generate_boilerplate(self, state: ProblemGenerationState) -> Dict[str, Any]:
+        """Generate language-specific boilerplate code using Gemini LLM."""
+        try:
+            # Skip if no language specified
+            if not state.language:
+                return {"boilerplate_code": "", "boilerplate_cache": state.boilerplate_cache}
+            
+            # Check cache first
+            if state.language in state.boilerplate_cache:
+                logger.info(f"Using cached boilerplate for {state.language}")
+                return {
+                    "boilerplate_code": state.boilerplate_cache[state.language],
+                    "boilerplate_cache": state.boilerplate_cache
+                }
+            
+            # Prepare test case examples for context
+            test_examples = ""
+            if state.test_cases and len(state.test_cases) > 0:
+                test_examples = "\n\nExample Test Cases:\n"
+                for i, tc in enumerate(state.test_cases[:3]):  # Use first 3 test cases
+                    test_examples += f"Test {i+1}:\nInput: {tc.input}\nExpected Output: {tc.expected_output}\n"
+            
+            prompt = f"""
+            Generate a boilerplate code template for the following competitive programming problem in {state.language.upper()}.
+            
+            Problem: {state.title}
+            Description: {state.formatted_statement}
+            Input Format: {state.input_format}
+            Output Format: {state.output_format}
+            Constraints: {state.constraints}
+            {test_examples}
+            
+            Requirements:
+            1. Create a complete, runnable code template
+            2. Include a main function/method that handles input/output
+            3. Include a solution function/method with clear TODO comments where the user should implement the logic
+            4. Add helpful comments explaining the structure
+            5. Handle input parsing according to the input format
+            6. Handle output formatting according to the output format
+            7. For Python: use proper type hints
+            8. For Java/C++: include necessary imports and class structure
+            9. For JavaScript: use modern ES6+ syntax
+            10. The code should be ready to run - user only needs to fill in the solution logic
+            
+            Language-specific guidelines:
+            - Python: Use def solution() with type hints, read from stdin, print to stdout
+            - JavaScript: Use function solution() with proper input handling from stdin
+            - Java: Use public class Solution with main method and solution method
+            - C++: Use standard template with main function and solution function
+            - Go: Use func solution() with proper package and imports
+            - Rust: Use fn solution() with proper input handling
+            
+            Return ONLY the code, no explanations. Make it production-ready and well-commented.
+            """
+            
+            messages = [
+                SystemMessage(content=f"You are an expert {state.language} programmer specializing in competitive programming."),
+                HumanMessage(content=prompt)
+            ]
+            
+            response = await self.llm.ainvoke(messages)
+            
+            # Clean up the response - remove markdown code blocks if present
+            boilerplate = response.content.strip()
+            if boilerplate.startswith("```"):
+                # Remove code fence
+                lines = boilerplate.split('\n')
+                boilerplate = '\n'.join(lines[1:-1]) if len(lines) > 2 else boilerplate
+            
+            # Update cache with new boilerplate
+            updated_cache = state.boilerplate_cache.copy()
+            updated_cache[state.language] = boilerplate
+            
+            return {
+                "boilerplate_code": boilerplate,
+                "boilerplate_cache": updated_cache
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating boilerplate: {e}")
+            return {"error": f"Failed to generate boilerplate: {str(e)}"}
+    
     async def finalize(self, state: ProblemGenerationState) -> Dict[str, Any]:
         """Finalize the problem generation."""
         if state.error:
@@ -244,12 +333,13 @@ class ProblemGenerationWorkflow:
         
         return {"completed": True}
     
-    async def generate_problem(self, leetcode_id: str = None, title: str = None, difficulty: str = None) -> ProblemGenerationState:
-        """Generate a competitive programming problem."""
+    async def generate_problem(self, leetcode_id: str = None, title: str = None, difficulty: str = None, language: str = None) -> ProblemGenerationState:
+        """Generate a competitive programming problem with optional boilerplate."""
         initial_state = ProblemGenerationState(
             leetcode_id=leetcode_id,
             title=title or "",
-            difficulty=difficulty or ""
+            difficulty=difficulty or "",
+            language=language or ""
         )
         
         try:
@@ -259,6 +349,40 @@ class ProblemGenerationWorkflow:
         except Exception as e:
             logger.error(f"Workflow execution failed: {e}")
             return ProblemGenerationState(error=f"Workflow failed: {str(e)}")
+    
+    async def switch_language(self, state: ProblemGenerationState, new_language: str) -> Dict[str, Any]:
+        """
+        Switch to a different programming language.
+        Uses cached boilerplate if available, generates new one if not.
+        """
+        try:
+            # Check if we already have this language cached
+            if new_language in state.boilerplate_cache:
+                logger.info(f"Switching to cached {new_language} boilerplate")
+                return {
+                    "language": new_language,
+                    "boilerplate_code": state.boilerplate_cache[new_language],
+                    "from_cache": True
+                }
+            
+            # Generate new boilerplate for this language
+            logger.info(f"Generating new {new_language} boilerplate")
+            state.language = new_language
+            result = await self.generate_boilerplate(state)
+            
+            if "error" in result:
+                return result
+            
+            return {
+                "language": new_language,
+                "boilerplate_code": result["boilerplate_code"],
+                "boilerplate_cache": result["boilerplate_cache"],
+                "from_cache": False
+            }
+            
+        except Exception as e:
+            logger.error(f"Error switching language: {e}")
+            return {"error": f"Failed to switch language: {str(e)}"}
 
 
 # Global workflow instance
