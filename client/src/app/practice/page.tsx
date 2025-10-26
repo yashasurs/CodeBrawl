@@ -4,15 +4,11 @@ import Footer from '@/components/Footer';
 import StatsOverview from '@/components/practice/StatsOverview';
 import ProblemFilters from '@/components/practice/ProblemFilters';
 import ProblemsTable from '@/components/practice/ProblemsTable';
-import QuickPractice from '@/components/practice/QuickPractice';
 import { useEffect, useMemo, useState } from 'react';
 import practiceService from '@/services/practice.service';
 import { notify } from '@/utils/notifications';
 import type {
   PracticeProblemSummary,
-  PracticeProblem,
-  PracticeLanguage,
-  PracticeSubmission,
 } from '@/types/practice';
 
 interface ProblemRow extends PracticeProblemSummary {
@@ -36,6 +32,7 @@ export default function PracticePage() {
   const [selectedDifficulty, setSelectedDifficulty] = useState('all');
   const [selectedTopic, setSelectedTopic] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'title' | 'difficulty' | 'acceptance'>('title');
   const [problems, setProblems] = useState<PracticeProblemSummary[]>([]);
   const [stats, setStats] = useState({
     totalSolved: 0,
@@ -50,8 +47,6 @@ export default function PracticePage() {
   });
   const [loading, setLoading] = useState<LoadingState>(DEFAULT_LOADING_STATE);
   const [topics, setTopics] = useState<string[]>([]);
-  const [activeProblem, setActiveProblem] = useState<PracticeProblem | null>(null);
-  const [activeSubmission, setActiveSubmission] = useState<PracticeSubmission | null>(null);
 
   // Fetch all available topics once on mount
   useEffect(() => {
@@ -119,51 +114,8 @@ export default function PracticePage() {
     setSelectedDifficulty('all');
     setSelectedTopic('all');
     setSearchQuery('');
+    setSortBy('title');
     setPagination((prev) => ({ ...prev, page: 1 }));
-  };
-
-  const handleRandomProblem = async (difficulty?: string) => {
-    setLoading((prev) => ({ ...prev, random: true }));
-
-    try {
-      const { data } = await practiceService.getRandomProblem({
-        difficulty,
-        source: 'database',
-      });
-
-      if ('_id' in data) {
-        setActiveProblem(data as PracticeProblem);
-      } else {
-        // For LeetCode dataset problems, they need to be in DB first
-        notify.error('Problem not ready', 'This problem needs to be imported to the database first.');
-      }
-    } catch (error) {
-      console.error('Failed to fetch random problem', error);
-      notify.error('Random problem failed', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setLoading((prev) => ({ ...prev, random: false }));
-    }
-  };
-
-  const handleSubmitSolution = async (payload: { problemId: string; code: string; language: PracticeLanguage }) => {
-    setLoading((prev) => ({ ...prev, submission: true }));
-
-    try {
-      const { data, message } = await practiceService.submitPracticeSolution(payload);
-      notify.info('Solution submitted', message);
-      setActiveSubmission(data);
-
-      if (data.isCorrect) {
-        notify.success('Accepted', 'All tests passed!');
-      } else if (data.status === 'wrong_answer') {
-        notify.error('Wrong Answer', 'Check failing test cases.');
-      }
-    } catch (error) {
-      console.error('Failed to submit solution', error);
-      notify.error('Submission failed', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setLoading((prev) => ({ ...prev, submission: false }));
-    }
   };
 
   const handlePaginationChange = (page: number) => {
@@ -171,12 +123,40 @@ export default function PracticePage() {
   };
 
   const tableProblems: ProblemRow[] = useMemo(() => {
-    return problems.map((problem) => ({
+    let sortedProblems = problems.map((problem) => ({
       ...problem,
       topic: problem.tags?.[0],
       solved: false,
     }));
-  }, [problems]);
+
+    // Filter by search query (client-side for better UX)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      sortedProblems = sortedProblems.filter((problem) => {
+        const titleMatch = problem.title.toLowerCase().includes(query);
+        const topicMatch = problem.topic?.toLowerCase().includes(query);
+        const tagsMatch = problem.tags?.some(tag => tag.toLowerCase().includes(query));
+        return titleMatch || topicMatch || tagsMatch;
+      });
+    }
+
+    // Sort by selected criteria
+    sortedProblems.sort((a, b) => {
+      if (sortBy === 'title') {
+        return a.title.localeCompare(b.title);
+      } else if (sortBy === 'difficulty') {
+        const difficultyOrder = { 'Easy': 1, 'Medium': 2, 'Hard': 3 };
+        return difficultyOrder[a.difficulty] - difficultyOrder[b.difficulty];
+      } else if (sortBy === 'acceptance') {
+        const aRate = a.acceptanceRate || 0;
+        const bRate = b.acceptanceRate || 0;
+        return bRate - aRate; // Descending order
+      }
+      return 0;
+    });
+
+    return sortedProblems;
+  }, [problems, sortBy, searchQuery]);
 
   return (
     <>
@@ -212,6 +192,26 @@ export default function PracticePage() {
           totalCount={pagination.total}
           isLoading={loading.list}
         />
+
+        {/* Sort Options */}
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-purple-300 font-semibold text-sm">Sort by:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'title' | 'difficulty' | 'acceptance')}
+              disabled={loading.list}
+              className="bg-black/60 border border-purple-600 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-purple-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="title">Title (A-Z)</option>
+              <option value="difficulty">Difficulty</option>
+              <option value="acceptance">Acceptance Rate</option>
+            </select>
+          </div>
+          <div className="text-sm text-gray-400">
+            {tableProblems.length} {tableProblems.length === 1 ? 'problem' : 'problems'} displayed
+          </div>
+        </div>
 
         <ProblemsTable
           problems={tableProblems.map((problem) => ({
@@ -251,15 +251,6 @@ export default function PracticePage() {
           </div>
         </div>
       </div>
-
-      <QuickPractice
-        onRandomProblem={handleRandomProblem}
-        activeProblem={activeProblem}
-        onSubmitSolution={handleSubmitSolution}
-        loadingState={loading}
-        activeSubmission={activeSubmission}
-        problems={problems}
-      />
 
       <Footer />
     </>

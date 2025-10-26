@@ -240,7 +240,58 @@ const generateProblem = asyncHandler(async (req, res) => {
 
         console.log('Problem updated successfully in database:', updatedProblem._id);
 
-        // Step 4: Return problem with quality metrics
+        // Step 4: Generate Python boilerplate automatically
+        try {
+            console.log('Generating Python boilerplate...');
+            const AI_SERVICE_URL = process.env.AI_SERVICE_URL || process.env.JUDGE0_SERVICE_URL || 'http://localhost:8001';
+            
+            // Prepare test cases for boilerplate generation
+            const testCasesForAnalysis = updatedProblem.testCases && Array.isArray(updatedProblem.testCases)
+                ? updatedProblem.testCases.slice(0, 3)
+                    .filter(tc => tc && (tc.input || tc.expectedOutput || tc.expected_output))
+                    .map(tc => ({
+                        input: tc.input || '',
+                        expected_output: tc.expectedOutput || tc.expected_output || ''
+                    }))
+                : [];
+            
+            const boilerplateResponse = await fetch(`${AI_SERVICE_URL}/api/v1/problems/boilerplate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: updatedProblem.title,
+                    description: updatedProblem.description,
+                    language: 'python',
+                    input_format: generatedContent.input_format || '',
+                    output_format: generatedContent.output_format || '',
+                    constraints: updatedProblem.constraints || '',
+                    examples: updatedProblem.examples || [],
+                    test_cases: testCasesForAnalysis  // Pass test cases for type inference
+                })
+            });
+
+            if (boilerplateResponse.ok) {
+                const { code } = await boilerplateResponse.json();
+                
+                // Update problem with Python boilerplate
+                if (!updatedProblem.starterCode) {
+                    updatedProblem.starterCode = {};
+                }
+                updatedProblem.starterCode.python = code;
+                await updatedProblem.save();
+                
+                console.log('Python boilerplate generated and cached');
+            } else {
+                console.warn('Failed to generate Python boilerplate, will generate on demand');
+            }
+        } catch (boilerplateError) {
+            console.warn('Boilerplate generation error (non-critical):', boilerplateError.message);
+            // Don't fail the whole request if boilerplate generation fails
+        }
+
+        // Step 5: Return problem with quality metrics
         const responseData = {
             ...updatedProblem.toObject(),
             // Include quality metrics from validation
@@ -592,6 +643,197 @@ const searchLeetCodeProblems = asyncHandler(async (req, res) => {
     }
 });
 
+// Generate boilerplate code for a specific language
+const generateBoilerplate = asyncHandler(async (req, res) => {
+    const { problemId, language } = req.body;
+
+    if (!problemId || !language) {
+        throw new ApiError(400, "Problem ID and language are required");
+    }
+
+    console.log(`Generating boilerplate for problem ${problemId} in ${language}`);
+
+    try {
+        // Find the problem
+        let problem = await Problem.findById(problemId);
+        if (!problem) {
+            problem = await Problem.findOne({ titleSlug: problemId });
+        }
+        if (!problem) {
+            throw new ApiError(404, "Problem not found");
+        }
+
+        // Check if boilerplate already exists in cache
+        if (problem.starterCode && problem.starterCode[language]) {
+            console.log(`Boilerplate for ${language} found in cache`);
+            return res
+                .status(200)
+                .json(new ApiResponse(200, {
+                    language,
+                    code: problem.starterCode[language],
+                    cached: true
+                }, "Boilerplate fetched from cache"));
+        }
+
+        // Generate boilerplate using AI service
+        console.log(`Requesting boilerplate generation from AI service...`);
+        const AI_SERVICE_URL = process.env.AI_SERVICE_URL || process.env.JUDGE0_SERVICE_URL || 'http://localhost:8001';
+        
+        // Prepare test cases (first 3 for analysis)
+        const testCasesForAnalysis = problem.testCases && Array.isArray(problem.testCases)
+            ? problem.testCases.slice(0, 3)
+                .filter(tc => tc && (tc.input || tc.expectedOutput || tc.expected_output))
+                .map(tc => ({
+                    input: tc.input || '',
+                    expected_output: tc.expectedOutput || tc.expected_output || ''
+                }))
+            : [];
+        
+        const response = await fetch(`${AI_SERVICE_URL}/api/v1/problems/boilerplate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                title: problem.title,
+                description: problem.description,
+                language: language,
+                input_format: problem.inputFormat || '',
+                output_format: problem.outputFormat || '',
+                constraints: problem.constraints || '',
+                examples: problem.examples || [],
+                test_cases: testCasesForAnalysis  // Pass test cases for type inference
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('AI service error:', errorText);
+            throw new Error(`AI service returned ${response.status}: ${errorText}`);
+        }
+
+        const { code } = await response.json();
+        console.log(`Boilerplate generated successfully (${code.length} chars)`);
+
+        // Cache the boilerplate in the problem document
+        if (!problem.starterCode) {
+            problem.starterCode = {};
+        }
+        problem.starterCode[language] = code;
+        await problem.save();
+
+        console.log(`Boilerplate cached for language: ${language}`);
+
+        return res
+            .status(200)
+            .json(new ApiResponse(200, {
+                language,
+                code,
+                cached: false
+            }, "Boilerplate generated and cached successfully"));
+
+    } catch (error) {
+        console.error('Boilerplate generation error:', error);
+        throw new ApiError(500, `Failed to generate boilerplate: ${error.message}`);
+    }
+});
+
+// Get boilerplate code (from cache or generate if needed)
+const getBoilerplate = asyncHandler(async (req, res) => {
+    const { problemId } = req.params;
+    const { language = 'python' } = req.query;
+
+    console.log(`Getting boilerplate for problem ${problemId} in ${language}`);
+
+    try {
+        // Find the problem
+        let problem = await Problem.findById(problemId);
+        if (!problem) {
+            problem = await Problem.findOne({ titleSlug: problemId });
+        }
+        if (!problem) {
+            throw new ApiError(404, "Problem not found");
+        }
+
+        // Check if boilerplate exists
+        if (problem.starterCode && problem.starterCode[language]) {
+            return res
+                .status(200)
+                .json(new ApiResponse(200, {
+                    language,
+                    code: problem.starterCode[language],
+                    allLanguages: Object.keys(problem.starterCode || {})
+                }, "Boilerplate retrieved successfully"));
+        }
+
+        // If Python boilerplate doesn't exist, generate it immediately
+        if (language === 'python') {
+            console.log('Python boilerplate not found, generating...');
+            
+            const AI_SERVICE_URL = process.env.AI_SERVICE_URL || process.env.JUDGE0_SERVICE_URL || 'http://localhost:8001';
+            
+            // Prepare test cases (first 3 for analysis)
+            const testCasesForAnalysis = problem.testCases && Array.isArray(problem.testCases)
+                ? problem.testCases.slice(0, 3)
+                    .filter(tc => tc && (tc.input || tc.expectedOutput || tc.expected_output))
+                    .map(tc => ({
+                        input: tc.input || '',
+                        expected_output: tc.expectedOutput || tc.expected_output || ''
+                    }))
+                : [];
+            
+            const response = await fetch(`${AI_SERVICE_URL}/api/v1/problems/boilerplate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: problem.title,
+                    description: problem.description,
+                    language: 'python',
+                    input_format: problem.inputFormat || '',
+                    output_format: problem.outputFormat || '',
+                    constraints: problem.constraints || '',
+                    examples: problem.examples || [],
+                    test_cases: testCasesForAnalysis  // Pass test cases for type inference
+                })
+            });
+
+            if (response.ok) {
+                const { code } = await response.json();
+                
+                // Cache it
+                if (!problem.starterCode) {
+                    problem.starterCode = {};
+                }
+                problem.starterCode['python'] = code;
+                await problem.save();
+
+                return res
+                    .status(200)
+                    .json(new ApiResponse(200, {
+                        language: 'python',
+                        code,
+                        allLanguages: ['python']
+                    }, "Python boilerplate generated successfully"));
+            }
+        }
+
+        // Return empty if not found
+        return res
+            .status(200)
+            .json(new ApiResponse(200, {
+                language,
+                code: '',
+                allLanguages: Object.keys(problem.starterCode || {})
+            }, "Boilerplate not found for this language"));
+
+    } catch (error) {
+        console.error('Get boilerplate error:', error);
+        throw new ApiError(500, `Failed to get boilerplate: ${error.message}`);
+    }
+});
+
 export {
     getProblems,
     getProblem,
@@ -603,5 +845,7 @@ export {
     getRandomProblem,
     getLeetCodeStats,
     searchLeetCodeProblems,
-    getAllTags
+    getAllTags,
+    generateBoilerplate,
+    getBoilerplate
 };

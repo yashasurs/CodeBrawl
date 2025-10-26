@@ -94,6 +94,21 @@ const practiceService = {
     const response = await apiClient.get<ApiResponse<PracticeSubmission>>(`/api/v1/submissions/${submissionId}`);
     return response.data;
   },
+
+  async getBoilerplate(problemId: string, language: string = 'python') {
+    const response = await apiClient.get<ApiResponse<{ language: string; code: string; allLanguages: string[] }>>(`/api/v1/problems/${problemId}/boilerplate`, {
+      params: { language },
+    });
+    return response.data;
+  },
+
+  async generateBoilerplate(problemId: string, language: string) {
+    const response = await apiClient.post<ApiResponse<{ language: string; code: string; cached: boolean }>>('/api/v1/problems/boilerplate', {
+      problemId,
+      language,
+    });
+    return response.data;
+  },
 };
 
 export default practiceService;

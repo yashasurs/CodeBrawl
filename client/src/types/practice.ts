@@ -68,6 +68,7 @@ export type PracticeLanguage =
 
 export type PracticeSubmissionStatus =
   | 'pending'
+  | 'processing'
   | 'accepted'
   | 'wrong_answer'
   | 'time_limit_exceeded'

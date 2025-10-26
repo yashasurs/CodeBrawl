@@ -6,6 +6,7 @@ from typing import Optional, List, Dict, Any
 
 from app.workflows.problem_generation import generate_problem, ProblemData
 from app.schemas.schemas import TestCase
+from app.services.boilerplate_generator import boilerplate_generator
 
 router = APIRouter()
 
@@ -115,3 +116,118 @@ async def generate_problem_endpoint(
 async def health_check():
     """Health check for problem generation service."""
     return {"status": "healthy", "service": "problem-generation"}
+
+
+class BoilerplateRequest(BaseModel):
+    """Request model for boilerplate generation."""
+    title: str
+    description: str
+    language: str
+    input_format: Optional[str] = ""
+    output_format: Optional[str] = ""
+    constraints: Optional[str] = ""
+    examples: Optional[List[Dict[str, str]]] = []
+    test_cases: Optional[List[Dict[str, Any]]] = []  # Added for type inference
+
+
+class BoilerplateResponse(BaseModel):
+    """Response model for boilerplate generation."""
+    language: str
+    code: str
+
+
+@router.post("/boilerplate", response_model=BoilerplateResponse)
+async def generate_boilerplate(request: BoilerplateRequest):
+    """
+    Generate boilerplate starter code for a problem in a specific language.
+    
+    This endpoint uses AI to create a clean function signature with:
+    - Proper imports and includes
+    - Function signature with appropriate types
+    - Input/output handling (stdin/stdout)
+    - Helpful comments
+    - Empty function body for user implementation
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Boilerplate generation request: {request.title} ({request.language})")
+    
+    try:
+        code = await boilerplate_generator.generate_boilerplate(
+            title=request.title,
+            description=request.description,
+            language=request.language,
+            input_format=request.input_format,
+            output_format=request.output_format,
+            constraints=request.constraints,
+            examples=request.examples,
+            test_cases=request.test_cases  # Pass test cases for type inference
+        )
+        
+        logger.info(f"Boilerplate generated successfully ({len(code)} chars)")
+        
+        return BoilerplateResponse(
+            language=request.language,
+            code=code
+        )
+        
+    except Exception as e:
+        logger.error(f"Boilerplate generation failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Boilerplate generation error: {str(e)}"
+        )
+
+
+class AllBoilerplatesRequest(BaseModel):
+    """Request model for generating boilerplates for all languages."""
+    title: str
+    description: str
+    input_format: Optional[str] = ""
+    output_format: Optional[str] = ""
+    constraints: Optional[str] = ""
+    examples: Optional[List[Dict[str, str]]] = []
+    test_cases: Optional[List[Dict[str, Any]]] = []  # Added for type inference
+    languages: Optional[List[str]] = None  # If None, generate for all supported languages
+
+
+class AllBoilerplatesResponse(BaseModel):
+    """Response model for all boilerplates."""
+    boilerplates: Dict[str, str]
+
+
+@router.post("/boilerplates/all", response_model=AllBoilerplatesResponse)
+async def generate_all_boilerplates(request: AllBoilerplatesRequest):
+    """
+    Generate boilerplate starter code for all supported languages.
+    
+    Used when a problem is first generated to cache boilerplates for all languages.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Generating boilerplates for all languages: {request.title}")
+    
+    try:
+        boilerplates = await boilerplate_generator.generate_all_languages(
+            title=request.title,
+            description=request.description,
+            input_format=request.input_format,
+            output_format=request.output_format,
+            constraints=request.constraints,
+            examples=request.examples,
+            test_cases=request.test_cases,  # Pass test cases for type inference
+            languages=request.languages
+        )
+        
+        logger.info(f"Generated boilerplates for {len(boilerplates)} languages")
+        
+        return AllBoilerplatesResponse(boilerplates=boilerplates)
+        
+    except Exception as e:
+        logger.error(f"All boilerplates generation failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Boilerplates generation error: {str(e)}"
+        )

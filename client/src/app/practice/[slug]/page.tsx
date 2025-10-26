@@ -211,16 +211,59 @@ export default function ProblemSolvePage() {
     };
   }, []);
 
-  // Update code when language changes
+  // Update code when language changes - fetch boilerplate if needed
   useEffect(() => {
-    if (!problem) return;
-    const starterCode = problem.starterCode || {};
-    if (starterCode[language]) {
-      setCode(starterCode[language] || getDefaultTemplate(language));
-    } else {
-      setCode(getDefaultTemplate(language));
-    }
+    const fetchBoilerplate = async () => {
+      if (!problem) return;
+      
+      const starterCode = problem.starterCode || {};
+      
+      // If we already have boilerplate for this language, use it
+      if (starterCode[language]) {
+        setCode(starterCode[language]);
+        return;
+      }
+      
+      // Otherwise, fetch/generate boilerplate from backend
+      try {
+        console.log(`Fetching boilerplate for ${language}...`);
+        notify.info('Loading starter code...', `Preparing ${language} boilerplate`);
+        
+        const { data } = await practiceService.generateBoilerplate(problem._id, language);
+        
+        if (data.code) {
+          setCode(data.code);
+          
+          // Update problem state to cache the boilerplate
+          setProblem((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              starterCode: {
+                ...prev.starterCode,
+                [language]: data.code,
+              },
+            };
+          });
+          
+          if (!data.cached) {
+            notify.success('Starter code ready!', `${language} boilerplate generated`);
+          }
+        } else {
+          // Fallback to default template
+          setCode(getDefaultTemplate(language));
+        }
+      } catch (error) {
+        console.error('Failed to fetch boilerplate:', error);
+        // Fallback to default template on error
+        setCode(getDefaultTemplate(language));
+        notify.warning('Using default template', `Failed to load ${language} boilerplate`);
+      }
+    };
+    
+    fetchBoilerplate();
   }, [language, problem]);
+
 
   const getDefaultTemplate = (lang: PracticeLanguage): string => {
     const templates: Record<PracticeLanguage, string> = {
@@ -289,22 +332,72 @@ export default function ProblemSolvePage() {
       setRunResult(null); // Clear run results when submitting
       notify.info('Solution submitted', message);
 
-      if (data.isCorrect || data.status === 'accepted') {
-        notify.success('Accepted! 🎉', `All ${data.totalTestCases} test cases passed!`);
-      } else if (data.status === 'wrong_answer') {
-        notify.error('Wrong Answer', `${data.testCasesPassed}/${data.totalTestCases} test cases passed`);
-      } else if (data.status === 'compilation_error') {
-        notify.error('Compilation Error', data.errorMessage || 'Check your syntax');
-      } else if (data.status === 'runtime_error') {
-        notify.error('Runtime Error', data.errorMessage || 'Your code crashed during execution');
-      } else if (data.status === 'time_limit_exceeded') {
-        notify.error('Time Limit Exceeded', 'Your solution is too slow');
+      // Poll for submission result if status is pending
+      if (data.status === 'pending' || data.status === 'processing') {
+        pollSubmissionStatus(data._id);
+      } else {
+        // Show final result immediately if not pending
+        showSubmissionResult(data);
       }
     } catch (error) {
       console.error('Failed to submit solution', error);
       notify.error('Submission failed', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Poll for submission status updates
+  const pollSubmissionStatus = async (submissionId: string) => {
+    const maxAttempts = 30; // Poll for up to 30 seconds
+    let attempts = 0;
+    
+    const pollInterval = setInterval(async () => {
+      attempts++;
+      
+      try {
+        const { data } = await practiceService.getSubmission(submissionId);
+        
+        console.log(`Poll attempt ${attempts}: Status = ${data.status}`);
+        
+        // Update submission state
+        setSubmission(data);
+        
+        // Check if submission is complete
+        if (data.status !== 'pending' && data.status !== 'processing') {
+          clearInterval(pollInterval);
+          setIsSubmitting(false);
+          showSubmissionResult(data);
+        }
+        
+        // Stop polling after max attempts
+        if (attempts >= maxAttempts) {
+          clearInterval(pollInterval);
+          setIsSubmitting(false);
+          notify.warning('Submission timeout', 'Taking longer than expected. Check submissions later.');
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+        clearInterval(pollInterval);
+        setIsSubmitting(false);
+        notify.error('Failed to get submission status', error instanceof Error ? error.message : 'Unknown error');
+      }
+    }, 1000); // Poll every second
+  };
+
+  // Show submission result notification
+  const showSubmissionResult = (data: PracticeSubmission) => {
+    if (data.isCorrect || data.status === 'accepted') {
+      notify.success('Accepted! 🎉', `All ${data.totalTestCases} test cases passed!`);
+    } else if (data.status === 'wrong_answer') {
+      notify.error('Wrong Answer', `${data.testCasesPassed}/${data.totalTestCases} test cases passed`);
+    } else if (data.status === 'compilation_error') {
+      notify.error('Compilation Error', data.errorMessage || 'Check your syntax');
+    } else if (data.status === 'runtime_error') {
+      notify.error('Runtime Error', data.errorMessage || 'Your code crashed during execution');
+    } else if (data.status === 'time_limit_exceeded') {
+      notify.error('Time Limit Exceeded', 'Your solution is too slow');
+    } else if (data.status === 'memory_limit_exceeded') {
+      notify.error('Memory Limit Exceeded', 'Your solution uses too much memory');
     }
   };
 

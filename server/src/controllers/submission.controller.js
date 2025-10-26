@@ -54,7 +54,9 @@ const submitCodeForDuel = asyncHandler(async (req, res) => {
         memory_limit: duel.problem.memoryLimit || 256
     }).then(result => {
         // Update submission with results (this happens asynchronously)
-        updateSubmissionResult({ params: { submissionId: submission._id.toString() }, body: result });
+        _updateSubmissionResultInternal(submission._id.toString(), result).catch(err => {
+            console.error('Failed to update submission result:', err);
+        });
     }).catch(error => {
         console.error('Judge0 execution error:', error);
         // Update submission with error status
@@ -210,9 +212,8 @@ const submitCodeForPractice = asyncHandler(async (req, res) => {
             total: result.totalTestCases || result.total_tests
         });
         // Update submission with results (this happens asynchronously)
-        updateSubmissionResult({ 
-            params: { submissionId: submission._id.toString() }, 
-            body: result 
+        _updateSubmissionResultInternal(submission._id.toString(), result).catch(err => {
+            console.error('Failed to update submission result:', err);
         });
     }).catch(error => {
         console.error('Judge0 execution error:', error);
@@ -380,8 +381,8 @@ const getProblemSubmissions = asyncHandler(async (req, res) => {
 });
 
 // Update submission result (called by judge service)
-const updateSubmissionResult = asyncHandler(async (req, res) => {
-    const { submissionId } = req.params;
+// Internal function to update submission result (can be called without res object)
+const _updateSubmissionResultInternal = async (submissionId, resultData) => {
     const { 
         status, 
         executionTime,
@@ -400,11 +401,12 @@ const updateSubmissionResult = asyncHandler(async (req, res) => {
         score,
         isCorrect,
         is_correct
-    } = req.body;
+    } = resultData;
 
     const submission = await Submission.findById(submissionId);
     if (!submission) {
-        throw new ApiError(404, "Submission not found");
+        console.error(`Submission not found: ${submissionId}`);
+        return null;
     }
 
     // Handle both camelCase and snake_case from Judge0 service
@@ -468,6 +470,19 @@ const updateSubmissionResult = asyncHandler(async (req, res) => {
 
             await duel.save();
         }
+    }
+
+    return submission;
+};
+
+// HTTP endpoint wrapper
+const updateSubmissionResult = asyncHandler(async (req, res) => {
+    const { submissionId } = req.params;
+    
+    const submission = await _updateSubmissionResultInternal(submissionId, req.body);
+    
+    if (!submission) {
+        throw new ApiError(404, "Submission not found");
     }
 
     return res

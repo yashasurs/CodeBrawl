@@ -171,7 +171,9 @@ class Judge0Client {
     /**
      * Get submission result by token (with retries)
      */
-    static async _getSubmissionResult(token, maxAttempts = 10) {
+    static async _getSubmissionResult(token, maxAttempts = 20) {  // Increased from 10 to 20
+        console.log(`Polling Judge0 for token: ${token} (max attempts: ${maxAttempts})`);
+        
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             try {
                 const response = await fetch(`${JUDGE0_BASE_URL}/submissions/${token}?base64_encoded=false&fields=*`, {
@@ -187,9 +189,15 @@ class Judge0Client {
                     const status = result.status || {};
                     const statusId = status.id;
 
+                    // Log current status for debugging
+                    if (attempt % 5 === 0 || statusId !== 1 && statusId !== 2) {
+                        console.log(`Attempt ${attempt + 1}/${maxAttempts}: Status ${statusId} (${status.description})`);
+                    }
+
                     // Status IDs: 1 = In Queue, 2 = Processing
                     // If not in queue or processing, execution is complete
                     if (statusId !== 1 && statusId !== 2) {
+                        console.log(`✓ Execution completed: ${status.description}`);
                         return {
                             status_id: statusId,
                             status_description: status.description || 'Unknown',
@@ -202,21 +210,22 @@ class Judge0Client {
                     }
                 }
 
-                // Wait before next attempt
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // Wait before next attempt (reduced from 1000ms to 500ms for faster polling)
+                await new Promise(resolve => setTimeout(resolve, 500));
 
             } catch (error) {
-                console.error(`Error getting submission result (attempt ${attempt + 1}):`, error);
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                console.error(`Error getting submission result (attempt ${attempt + 1}):`, error.message);
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
         }
 
         // Timeout after max attempts
+        console.error(`✗ Timeout after ${maxAttempts} attempts for token: ${token}`);
         return {
             status_id: 13, // Internal Error
             status_description: 'Execution timeout',
             stdout: '',
-            stderr: 'Maximum retry attempts reached',
+            stderr: 'Maximum retry attempts reached. Judge0 API may be overloaded or code execution is taking too long.',
             compile_output: '',
             time: 0,
             memory: 0
