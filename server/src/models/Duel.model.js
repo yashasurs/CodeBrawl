@@ -108,7 +108,7 @@ duelSchema.pre('save', function(next) {
 duelSchema.index({ status: 1, createdAt: -1 });
 duelSchema.index({ player1: 1 });
 duelSchema.index({ player2: 1 });
-duelSchema.index({ roomId: 1 });
+// roomId index already created by unique: true in schema definition
 
 // Add pagination plugin
 duelSchema.plugin(mongooseAggregatePaginate);

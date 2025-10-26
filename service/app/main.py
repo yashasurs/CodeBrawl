@@ -2,9 +2,17 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 
 from app.core.config import settings
 from app.api.v1.api import api_router
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="CodeBrawl Judge & AI Service",
@@ -23,6 +31,16 @@ app.add_middleware(
 
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
+
+logger.info("=" * 60)
+logger.info("FastAPI Service Starting")
+logger.info(f"CORS Origins: {settings.ALLOWED_ORIGINS}")
+logger.info(f"Google API Key configured: {bool(settings.GOOGLE_API_KEY)}")
+logger.info("Routes registered:")
+for route in app.routes:
+    if hasattr(route, 'methods'):
+        logger.info(f"  {list(route.methods)} {route.path}")
+logger.info("=" * 60)
 
 
 @app.get("/")

@@ -1,9 +1,10 @@
 """Core configuration settings for Judge0 and AI services."""
 
 try:
-    from pydantic_settings import BaseSettings
+    from pydantic_settings import BaseSettings, SettingsConfigDict
 except ImportError:
     from pydantic import BaseSettings
+    SettingsConfigDict = None
 from typing import List
 
 
@@ -17,6 +18,9 @@ class Settings(BaseSettings):
     # Judge0
     JUDGE0_BASE_URL: str = "https://judge0-ce.p.rapidapi.com"
     
+    # Express API
+    EXPRESS_API_URL: str = "http://localhost:8000"
+    
     # CORS
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5000"]
     
@@ -26,8 +30,12 @@ class Settings(BaseSettings):
     # Dataset
     LEETCODE_DATASET_PATH: str = "./data/leetcode_problems.json"
 
-    class Config:
-        env_file = ".env"
+    if SettingsConfigDict:
+        model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    else:
+        class Config:
+            env_file = ".env"
+            extra = "ignore"
         
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

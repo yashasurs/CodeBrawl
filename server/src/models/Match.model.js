@@ -175,8 +175,7 @@ matchSchema.virtual('isFull').get(function() {
 // Indexes for efficient querying
 matchSchema.index({ status: 1, createdAt: -1 });
 matchSchema.index({ "participants.user": 1 });
-matchSchema.index({ matchId: 1 });
-matchSchema.index({ roomId: 1 });
+// matchId and roomId indexes already created by unique: true in schema definition
 
 // Add pagination plugin
 matchSchema.plugin(mongooseAggregatePaginate);

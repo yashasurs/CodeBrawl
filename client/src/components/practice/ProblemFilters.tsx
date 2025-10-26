@@ -2,23 +2,31 @@ interface ProblemFiltersProps {
   selectedDifficulty: string;
   selectedTopic: string;
   searchQuery: string;
+  topics: string[];
   onDifficultyChange: (difficulty: string) => void;
   onTopicChange: (topic: string) => void;
   onSearchChange: (query: string) => void;
+  onResetFilters?: () => void;
   resultCount: number;
   totalCount: number;
+  isLoading?: boolean;
 }
 
-export default function ProblemFilters({ 
-  selectedDifficulty, 
-  selectedTopic, 
+export default function ProblemFilters({
+  selectedDifficulty,
+  selectedTopic,
   searchQuery,
-  onDifficultyChange, 
-  onTopicChange, 
+  topics,
+  onDifficultyChange,
+  onTopicChange,
   onSearchChange,
-  resultCount, 
-  totalCount 
+  onResetFilters,
+  resultCount,
+  totalCount,
+  isLoading = false,
 }: ProblemFiltersProps) {
+  const disabled = isLoading;
+
   return (
     <div className="bg-black/40 backdrop-blur-sm border border-purple-800/30 rounded-xl p-6 mb-8">
       {/* Search Bar */}
@@ -34,7 +42,8 @@ export default function ProblemFilters({
             placeholder="Search problems by title..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-black/60 border border-purple-600/70 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 transition-all duration-200"
+            disabled={disabled}
+            className="w-full pl-10 pr-4 py-3 bg-black/60 border border-purple-600/70 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
       </div>
@@ -46,31 +55,44 @@ export default function ProblemFilters({
           <select 
             value={selectedDifficulty}
             onChange={(e) => onDifficultyChange(e.target.value)}
-            className="bg-black/60 border border-purple-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-400"
+            disabled={disabled}
+            className="bg-black/60 border border-purple-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-400 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="all">All Difficulties</option>
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
+            <option value="Easy">Easy</option>
+            <option value="Medium">Medium</option>
+            <option value="Hard">Hard</option>
           </select>
 
           <select 
             value={selectedTopic}
             onChange={(e) => onTopicChange(e.target.value)}
-            className="bg-black/60 border border-purple-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-400"
+            disabled={disabled}
+            className="bg-black/60 border border-purple-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-400 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="all">All Topics</option>
-            <option value="Arrays">Arrays</option>
-            <option value="Trees">Trees</option>
-            <option value="Dynamic Programming">Dynamic Programming</option>
-            <option value="Linked Lists">Linked Lists</option>
-            <option value="Strings">Strings</option>
-            <option value="Binary Search">Binary Search</option>
+            {topics.map((topic) => (
+              <option key={topic} value={topic}>
+                {topic}
+              </option>
+            ))}
           </select>
         </div>
 
-        <div className="text-gray-400">
-          Showing {resultCount} of {totalCount} problems
+        <div className="flex items-center gap-4 text-gray-400">
+          <span>
+            Showing {resultCount} of {totalCount} problems
+          </span>
+          {onResetFilters && (
+            <button
+              type="button"
+              onClick={onResetFilters}
+              disabled={disabled}
+              className="px-3 py-2 text-sm font-semibold text-purple-300 border border-purple-600/60 rounded-lg bg-black/40 hover:bg-purple-900/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Reset
+            </button>
+          )}
         </div>
       </div>
     </div>

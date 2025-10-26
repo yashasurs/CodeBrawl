@@ -9,7 +9,8 @@ import {
     getProblemsByDifficulty,
     getRandomProblem,
     getLeetCodeStats,
-    searchLeetCodeProblems
+    searchLeetCodeProblems,
+    getAllTags
 } from "../controllers/problem.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -21,6 +22,7 @@ router.route("/random").get(getRandomProblem);
 router.route("/difficulty/:difficulty").get(getProblemsByDifficulty);
 router.route("/leetcode/stats").get(getLeetCodeStats);
 router.route("/leetcode/search").get(searchLeetCodeProblems);
+router.route("/tags").get(getAllTags);
 router.route("/:problemId").get(getProblem);
 
 // Protected routes (require authentication)

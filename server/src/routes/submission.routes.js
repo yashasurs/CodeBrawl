@@ -2,6 +2,7 @@ import { Router } from "express";
 import { 
     submitCodeForDuel,
     submitCodeForPractice,
+    runCodeAgainstSamples,
     getSubmission,
     getUserSubmissions,
     getDuelSubmissions,
@@ -21,6 +22,7 @@ router.use(verifyJWT); // Apply JWT middleware to all routes below
 
 router.route("/duel").post(submitCodeForDuel);
 router.route("/practice").post(submitCodeForPractice);
+router.route("/practice/run").post(runCodeAgainstSamples);
 router.route("/user/my-submissions").get(getUserSubmissions);
 router.route("/problem/:problemId").get(getProblemSubmissions);
 

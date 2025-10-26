@@ -1,18 +1,36 @@
-interface Problem {
-  id: number;
+"use client";
+import { useRouter } from 'next/navigation';
+
+interface ProblemRow {
+  id: string;
   title: string;
   difficulty: string;
   topic: string;
   solved: boolean;
-  acceptance: string;
-  likes: number;
+  acceptance?: string;
+  likes?: number;
+  slug?: string;
 }
 
 interface ProblemsTableProps {
-  problems: Problem[];
+  problems: ProblemRow[];
+  isLoading?: boolean;
+  onSelectProblem?: (problemId: string) => void;
 }
 
-export default function ProblemsTable({ problems }: ProblemsTableProps) {
+export default function ProblemsTable({ problems, isLoading = false, onSelectProblem }: ProblemsTableProps) {
+  const router = useRouter();
+
+  const handleSelect = (problemId: string, slug?: string) => {
+    // If slug is provided, navigate to dedicated solve page
+    if (slug) {
+      router.push(`/practice/${slug}`);
+    } else if (onSelectProblem) {
+      // Fallback to callback for quick practice
+      onSelectProblem(problemId);
+    }
+  };
+
   return (
     <div className="bg-black/40 backdrop-blur-sm border border-purple-800/30 rounded-xl overflow-hidden">
       <div className="overflow-x-auto">
@@ -29,8 +47,21 @@ export default function ProblemsTable({ problems }: ProblemsTableProps) {
             </tr>
           </thead>
           <tbody>
-            {problems.map((problem) => (
-              <tr key={problem.id} className="border-b border-purple-800/20 hover:bg-purple-900/20 transition-colors">
+            {isLoading ? (
+              <tr>
+                <td colSpan={7} className="py-6 px-6 text-center text-purple-200">
+                  Loading problems...
+                </td>
+              </tr>
+            ) : problems.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-6 px-6 text-center text-purple-200">
+                  No problems found. Try adjusting your filters.
+                </td>
+              </tr>
+            ) : (
+              problems.map((problem) => (
+                <tr key={problem.id} className="border-b border-purple-800/20 hover:bg-purple-900/20 transition-colors">
                 <td className="py-4 px-6">
                   {problem.solved ? (
                     <span className="text-green-400 text-xl">✓</span>
@@ -39,9 +70,13 @@ export default function ProblemsTable({ problems }: ProblemsTableProps) {
                   )}
                 </td>
                 <td className="py-4 px-6">
-                  <span className="text-white font-medium hover:text-purple-300 cursor-pointer">
+                  <button
+                    type="button"
+                    onClick={() => handleSelect(problem.id, problem.slug)}
+                    className="text-left text-white font-medium hover:text-purple-300 cursor-pointer"
+                  >
                     {problem.title}
-                  </span>
+                  </button>
                 </td>
                 <td className="py-4 px-6">
                   <span className={`font-semibold ${
@@ -52,15 +87,20 @@ export default function ProblemsTable({ problems }: ProblemsTableProps) {
                   </span>
                 </td>
                 <td className="py-4 px-6 text-gray-400">{problem.topic}</td>
-                <td className="py-4 px-6 text-gray-400">{problem.acceptance}</td>
-                <td className="py-4 px-6 text-gray-400">{problem.likes}</td>
+                <td className="py-4 px-6 text-gray-400">{problem.acceptance ?? '—'}</td>
+                <td className="py-4 px-6 text-gray-400">{problem.likes ?? 0}</td>
                 <td className="py-4 px-6">
-                  <button className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg font-bold text-sm transition-all duration-300 transform hover:scale-105">
+                  <button
+                    type="button"
+                    onClick={() => handleSelect(problem.id, problem.slug)}
+                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg font-bold text-sm transition-all duration-300 transform hover:scale-105"
+                  >
                     Solve
                   </button>
                 </td>
               </tr>
-            ))}
+              ))
+            )}
           </tbody>
         </table>
       </div>

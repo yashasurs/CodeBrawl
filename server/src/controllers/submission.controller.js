@@ -1,4 +1,4 @@
-import { asyncHandler } from "../utils/asyncHandler.js";
+import  asyncHandler  from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Submission } from "../models/Submission.model.js";
@@ -75,6 +75,82 @@ const submitCodeForDuel = asyncHandler(async (req, res) => {
         .json(new ApiResponse(201, populatedSubmission, "Code submitted successfully"));
 });
 
+// Run code against sample test cases (non-hidden ones only)
+const runCodeAgainstSamples = asyncHandler(async (req, res) => {
+    const { problemId, code, language } = req.body;
+    const userId = req.user._id;
+
+    if (!problemId || !code?.trim() || !language) {
+        throw new ApiError(400, "Problem ID, code, and language are required");
+    }
+
+    // Verify problem exists and has test cases
+    const problem = await Problem.findById(problemId);
+    if (!problem) {
+        throw new ApiError(404, "Problem not found");
+    }
+
+    if (!problem.testCases || problem.testCases.length === 0) {
+        throw new ApiError(400, "Problem has no test cases. Please generate the problem first.");
+    }
+
+    // Get only non-hidden (sample) test cases - typically 2-3 cases
+    const sampleTestCases = problem.testCases.filter(tc => !tc.isHidden).slice(0, 3);
+    
+    if (sampleTestCases.length === 0) {
+        throw new ApiError(400, "No sample test cases available for testing.");
+    }
+
+    // Format test cases for Judge0
+    const formattedTestCases = sampleTestCases.map(tc => ({
+        input: tc.input || '',
+        expected_output: tc.expectedOutput || tc.expected_output || '',
+        is_hidden: false
+    }));
+
+    console.log('Running code against sample test cases:', {
+        problem_id: problemId,
+        language,
+        sample_cases_count: formattedTestCases.length
+    });
+
+    try {
+        // Execute code synchronously for sample test cases (quick feedback)
+        const result = await Judge0Client.submitCode({
+            submission_id: `run_${userId}_${Date.now()}`, // Temporary ID for run
+            source_code: code.trim(),
+            language,
+            test_cases: formattedTestCases,
+            time_limit: problem.timeLimit || 2.0,
+            memory_limit: problem.memoryLimit || 256
+        }, true); // Pass true to wait for result
+
+        console.log('Run result:', {
+            status: result.status,
+            passed: result.passed_tests,
+            total: result.total_tests
+        });
+
+        // Return results immediately (not stored in database)
+        return res
+            .status(200)
+            .json(new ApiResponse(200, {
+                status: result.status,
+                testResults: result.test_results,
+                testCasesPassed: result.passed_tests,
+                totalTestCases: result.total_tests,
+                executionTime: result.execution_time,
+                memoryUsage: result.memory_usage,
+                errorMessage: result.error_message || '',
+                isCorrect: result.passed_tests === result.total_tests
+            }, "Code run against sample test cases"));
+
+    } catch (error) {
+        console.error('Run code error:', error);
+        throw new ApiError(500, `Failed to run code: ${error.message}`);
+    }
+});
+
 // Submit code for practice
 const submitCodeForPractice = asyncHandler(async (req, res) => {
     const { problemId, code, language } = req.body;
@@ -84,10 +160,14 @@ const submitCodeForPractice = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Problem ID, code, and language are required");
     }
 
-    // Verify problem exists
+    // Verify problem exists and has test cases
     const problem = await Problem.findById(problemId);
     if (!problem) {
         throw new ApiError(404, "Problem not found");
+    }
+
+    if (!problem.testCases || problem.testCases.length === 0) {
+        throw new ApiError(400, "Problem has no test cases. Please generate the problem first.");
     }
 
     // Create submission record
@@ -96,7 +176,22 @@ const submitCodeForPractice = asyncHandler(async (req, res) => {
         problem: problemId,
         code: code.trim(),
         language,
-        status: 'pending'
+        status: 'pending',
+        testCasesPassed: 0,
+        totalTestCases: problem.testCases.length
+    });
+
+    // Format test cases for Judge0 (ensure proper structure)
+    const formattedTestCases = problem.testCases.map(tc => ({
+        input: tc.input || '',
+        expected_output: tc.expectedOutput || tc.expected_output || '',
+        is_hidden: tc.isHidden || tc.is_hidden || false
+    }));
+
+    console.log('Submitting code to Judge0:', {
+        submission_id: submission._id.toString(),
+        language,
+        test_cases_count: formattedTestCases.length
     });
 
     // Send to Judge0 service for execution asynchronously
@@ -104,12 +199,21 @@ const submitCodeForPractice = asyncHandler(async (req, res) => {
         submission_id: submission._id.toString(),
         source_code: code.trim(),
         language,
-        test_cases: problem.testCases || [],
+        test_cases: formattedTestCases,
         time_limit: problem.timeLimit || 2.0,
         memory_limit: problem.memoryLimit || 256
     }).then(result => {
+        console.log('Judge0 result received:', {
+            submission_id: submission._id.toString(),
+            status: result.status,
+            passed: result.testCasesPassed || result.passed_tests,
+            total: result.totalTestCases || result.total_tests
+        });
         // Update submission with results (this happens asynchronously)
-        updateSubmissionResult({ params: { submissionId: submission._id.toString() }, body: result });
+        updateSubmissionResult({ 
+            params: { submissionId: submission._id.toString() }, 
+            body: result 
+        });
     }).catch(error => {
         console.error('Judge0 execution error:', error);
         // Update submission with error status
@@ -280,15 +384,22 @@ const updateSubmissionResult = asyncHandler(async (req, res) => {
     const { submissionId } = req.params;
     const { 
         status, 
-        executionTime, 
-        memoryUsage, 
+        executionTime,
+        execution_time, 
+        memoryUsage,
+        memory_usage, 
         output, 
-        errorMessage, 
+        errorMessage,
+        error_message, 
         testResults,
+        test_results,
         testCasesPassed,
+        passed_tests,
         totalTestCases,
+        total_tests,
         score,
-        isCorrect 
+        isCorrect,
+        is_correct
     } = req.body;
 
     const submission = await Submission.findById(submissionId);
@@ -296,20 +407,37 @@ const updateSubmissionResult = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Submission not found");
     }
 
+    // Handle both camelCase and snake_case from Judge0 service
+    const passedCount = testCasesPassed || passed_tests || 0;
+    const totalCount = totalTestCases || total_tests || 0;
+    const execTime = executionTime || execution_time || 0;
+    const memUsage = memoryUsage || memory_usage || 0;
+    const errMsg = errorMessage || error_message || "";
+    const results = testResults || test_results || [];
+    const correct = isCorrect || is_correct || (passedCount === totalCount && totalCount > 0);
+
     // Update submission
     submission.status = status;
-    submission.executionTime = executionTime || 0;
-    submission.memoryUsage = memoryUsage || 0;
+    submission.executionTime = execTime;
+    submission.memoryUsage = memUsage;
     submission.output = output || "";
-    submission.errorMessage = errorMessage || "";
-    submission.testResults = testResults || [];
-    submission.testCasesPassed = testCasesPassed || 0;
-    submission.totalTestCases = totalTestCases || 0;
-    submission.score = score || 0;
-    submission.isCorrect = isCorrect || false;
+    submission.errorMessage = errMsg;
+    submission.testResults = results;
+    submission.testCasesPassed = passedCount;
+    submission.totalTestCases = totalCount;
+    submission.score = score || (correct ? 100 : 0);
+    submission.isCorrect = correct;
     submission.completedAt = new Date();
 
     await submission.save();
+
+    console.log('Submission updated:', {
+        id: submissionId,
+        status: submission.status,
+        passed: passedCount,
+        total: totalCount,
+        isCorrect: correct
+    });
 
     // If it's a duel submission and correct, update duel scores
     if (submission.duel && submission.isCorrect) {
@@ -350,6 +478,7 @@ const updateSubmissionResult = asyncHandler(async (req, res) => {
 export {
     submitCodeForDuel,
     submitCodeForPractice,
+    runCodeAgainstSamples,
     getSubmission,
     getUserSubmissions,
     getDuelSubmissions,

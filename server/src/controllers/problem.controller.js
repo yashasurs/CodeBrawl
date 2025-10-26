@@ -1,9 +1,9 @@
-import { asyncHandler } from "../utils/asyncHandler.js";
+import  asyncHandler  from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Problem } from "../models/Problem.model.js";
 import Judge0Client from "../utils/judge0Client.js";
-import LeetCodeDataUtils from "../utils/leetcodeDataUtils.js";
+import aiServiceClient from "../utils/aiServiceClient.js";
 
 // Get all problems with filtering
 const getProblems = asyncHandler(async (req, res) => {
@@ -34,13 +34,38 @@ const getProblems = asyncHandler(async (req, res) => {
         ];
     }
 
-    const problems = await Problem.find(matchConditions)
-        .sort({ createdAt: -1 })
-        .limit(limit * 1)
-        .skip((page - 1) * limit)
-        .select('-testCases'); // Exclude test cases from list view for performance
-
     const total = await Problem.countDocuments(matchConditions);
+
+    // Define difficulty order for sorting
+    const difficultyOrder = { 'Easy': 1, 'Medium': 2, 'Hard': 3 };
+
+    // Fetch all matching problems
+    const allProblems = await Problem.find(matchConditions)
+        .select('-testCases') // Exclude test cases from list view for performance
+        .lean();
+
+    // Sort by difficulty (Easy -> Medium -> Hard), then by leetcodeId or title
+    const sortedProblems = allProblems.sort((a, b) => {
+        const diffA = difficultyOrder[a.difficulty] || 999;
+        const diffB = difficultyOrder[b.difficulty] || 999;
+        
+        if (diffA !== diffB) {
+            return diffA - diffB;
+        }
+        
+        // If same difficulty, sort by leetcodeId (if available) or title
+        if (a.leetcodeId && b.leetcodeId) {
+            return parseInt(a.leetcodeId) - parseInt(b.leetcodeId);
+        }
+        
+        return (a.title || '').localeCompare(b.title || '');
+    });
+
+    // Apply pagination after sorting
+    const problems = sortedProblems.slice(
+        (parseInt(page) - 1) * parseInt(limit),
+        parseInt(page) * parseInt(limit)
+    );
 
     return res
         .status(200)
@@ -52,7 +77,7 @@ const getProblems = asyncHandler(async (req, res) => {
         }, "Problems fetched successfully"));
 });
 
-// Get single problem by ID
+// Get single problem by ID or slug
 const getProblem = asyncHandler(async (req, res) => {
     const { problemId } = req.params;
     const { includeTestCases = false } = req.query;
@@ -62,7 +87,18 @@ const getProblem = asyncHandler(async (req, res) => {
         selectFields = '-testCases';
     }
 
-    const problem = await Problem.findById(problemId).select(selectFields);
+    // Try to find by ID first, then by titleSlug
+    let problem;
+    
+    // Check if problemId is a valid MongoDB ObjectId
+    if (problemId.match(/^[0-9a-fA-F]{24}$/)) {
+        problem = await Problem.findById(problemId).select(selectFields);
+    }
+    
+    // If not found by ID, try by titleSlug
+    if (!problem) {
+        problem = await Problem.findOne({ titleSlug: problemId }).select(selectFields);
+    }
 
     if (!problem) {
         throw new ApiError(404, "Problem not found");
@@ -80,66 +116,161 @@ const getProblem = asyncHandler(async (req, res) => {
 
 // Generate a new problem using AI service
 const generateProblem = asyncHandler(async (req, res) => {
-    const { leetcodeId, title, difficulty } = req.body;
+    const { problemId, useValidation = true, force = false } = req.body;
 
-    if (!leetcodeId && !title) {
-        throw new ApiError(400, "Either LeetCode ID or title must be provided");
+    console.log('=== PROBLEM GENERATION REQUEST ===');
+    console.log('Request body:', { problemId, useValidation, force });
+
+    if (!problemId) {
+        throw new ApiError(400, "Problem ID is required");
     }
 
     try {
-        // Call the AI service to generate problem
-        const generatedProblem = await Judge0Client.generateProblem({
-            leetcode_id: leetcodeId,
-            title,
-            difficulty
-        });
-
-        // Check if problem with same LeetCode ID already exists
-        if (generatedProblem.leetcode_id) {
-            const existingProblem = await Problem.findOne({ 
-                $or: [
-                    { leetcodeId: generatedProblem.leetcode_id },
-                    { title: generatedProblem.title },
-                    { titleSlug: generatedProblem.title_slug }
-                ]
-            });
-
-            if (existingProblem) {
-                return res
-                    .status(200)
-                    .json(new ApiResponse(200, existingProblem, "Problem already exists"));
-            }
+        // Step 1: Retrieve problem from database
+        console.log('Fetching problem from database...');
+        let problem = await Problem.findById(problemId);
+        
+        if (!problem) {
+            // Try by titleSlug
+            problem = await Problem.findOne({ titleSlug: problemId });
+        }
+        
+        if (!problem) {
+            throw new ApiError(404, "Problem not found. Please ensure the problem exists in the database before generating AI content.");
         }
 
-        // Create problem in database
-        const problem = await Problem.create({
-            leetcodeId: generatedProblem.leetcode_id,
-            titleSlug: generatedProblem.title_slug,
-            acceptanceRate: generatedProblem.acceptance_rate,
-            title: generatedProblem.title,
-            description: generatedProblem.formatted_statement,
-            difficulty: generatedProblem.difficulty,
-            tags: generatedProblem.tags || [],
-            constraints: generatedProblem.constraints,
-            examples: [], // Will be extracted from formatted statement
-            testCases: generatedProblem.test_cases.map(tc => ({
-                input: tc.input,
-                expectedOutput: tc.expected_output,
-                isHidden: tc.is_hidden || false
-            })),
-            timeLimit: generatedProblem.time_limit || 2,
-            memoryLimit: generatedProblem.memory_limit || 256,
-            points: generatedProblem.scoring_weight * 100,
-            createdBy: req.user?._id
+        // Check if problem already has generated content (unless force is true)
+        if (!force && problem.testCases && problem.testCases.length > 0) {
+            console.log('Problem already has generated content, skipping generation');
+            return res
+                .status(200)
+                .json(new ApiResponse(200, problem, "Problem already has generated content"));
+        }
+
+        console.log('Problem found:', {
+            id: problem._id,
+            title: problem.title,
+            difficulty: problem.difficulty
         });
 
+        // Step 2: Send problem data to AI service for generation
+        console.log(`Sending problem data to AI service (validation: ${useValidation ? 'enabled' : 'disabled'})...`);
+        
+        const generatedContent = await aiServiceClient.generateProblem({
+            leetcode_id: problem.leetcodeId,
+            title: problem.title,
+            title_slug: problem.titleSlug,
+            description: problem.description,
+            difficulty: problem.difficulty,
+            tags: problem.tags || [],
+            examples: problem.examples || [],
+            constraints: problem.constraints || ''
+        }, useValidation);
+
+        console.log('AI service response received:', {
+            formatted_statement_length: generatedContent.formatted_statement?.length || 0,
+            test_cases_count: generatedContent.test_cases?.length || 0,
+            validation_passed: generatedContent.validation_passed,
+            diversity_score: generatedContent.test_case_diversity_score,
+            coverage_score: generatedContent.coverage_score,
+            retry_count: generatedContent.retry_count
+        });
+
+        // Step 3: Update problem with generated content using findByIdAndUpdate to avoid version conflicts
+        // Validate and filter test cases to ensure they have required fields
+        const validTestCases = generatedContent.test_cases?.filter(tc => {
+            const hasInput = tc.input !== undefined && tc.input !== null && tc.input !== '';
+            const hasOutput = tc.expected_output !== undefined && tc.expected_output !== null && tc.expected_output !== '';
+            
+            if (!hasInput || !hasOutput) {
+                console.warn('Skipping invalid test case:', { 
+                    hasInput, 
+                    hasOutput,
+                    input: tc.input?.substring(0, 50),
+                    output: tc.expected_output?.substring(0, 50)
+                });
+                return false;
+            }
+            return true;
+        }) || [];
+
+        console.log(`Validated ${validTestCases.length} test cases out of ${generatedContent.test_cases?.length || 0}`);
+
+        // If no valid test cases, keep existing ones or create a minimal set
+        if (validTestCases.length === 0) {
+            console.warn('No valid test cases generated, keeping existing test cases');
+        }
+
+        const exampleTestCases = validTestCases.filter(tc => !tc.is_hidden).slice(0, 3);
+        const examples = exampleTestCases.length > 0 
+            ? exampleTestCases.map(tc => ({
+                input: String(tc.input || ''),
+                output: String(tc.expected_output || ''),
+                explanation: tc.explanation || ''
+              }))
+            : problem.examples;
+
+        const testCases = validTestCases.length > 0
+            ? validTestCases.map(tc => ({
+                input: String(tc.input || ''),
+                expectedOutput: String(tc.expected_output || ''),
+                isHidden: tc.is_hidden || false
+              }))
+            : problem.testCases;
+
+        const updateData = {
+            description: generatedContent.formatted_statement || problem.description,
+            constraints: generatedContent.constraints || problem.constraints,
+            examples: examples,
+            testCases: testCases.length > 0 ? testCases : problem.testCases, // Keep existing if validation fails
+            timeLimit: generatedContent.time_limit || problem.timeLimit || 2,
+            memoryLimit: generatedContent.memory_limit || problem.memoryLimit || 256
+        };
+
+        // Use findByIdAndUpdate with new option to get the updated document and avoid version conflicts
+        const updatedProblem = await Problem.findByIdAndUpdate(
+            problem._id,
+            updateData,
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedProblem) {
+            throw new ApiError(404, "Problem not found after update");
+        }
+
+        console.log('Problem updated successfully in database:', updatedProblem._id);
+
+        // Step 4: Return problem with quality metrics
+        const responseData = {
+            ...updatedProblem.toObject(),
+            // Include quality metrics from validation
+            validationPassed: generatedContent.validation_passed,
+            testCaseDiversityScore: generatedContent.test_case_diversity_score,
+            coverageScore: generatedContent.coverage_score,
+            retryCount: generatedContent.retry_count
+        };
+
         return res
-            .status(201)
-            .json(new ApiResponse(201, problem, "Problem generated and saved successfully"));
+            .status(200)
+            .json(new ApiResponse(200, responseData, "Problem generated and updated successfully"));
 
     } catch (error) {
-        console.error('Problem generation error:', error);
-        throw new ApiError(500, "Failed to generate problem. AI service may be unavailable.");
+        console.error('=== PROBLEM GENERATION ERROR ===');
+        console.error('Error type:', error.constructor.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        
+        // Check if it's a fetch/network error
+        if (error.message?.includes('fetch') || error.message?.includes('ECONNREFUSED')) {
+            throw new ApiError(503, `AI service unavailable: ${error.message}`);
+        }
+        
+        // Check if it's an AI service error
+        if (error.message?.includes('AI service')) {
+            throw new ApiError(500, error.message);
+        }
+        
+        throw new ApiError(500, `Failed to generate problem: ${error.message}`);
     }
 });
 
@@ -256,16 +387,29 @@ const getProblemsByDifficulty = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid difficulty level");
     }
 
-    const problems = await Problem.find({ 
+    const total = await Problem.countDocuments({ difficulty, isActive: true });
+
+    // Fetch all problems with this difficulty
+    const allProblems = await Problem.find({ 
         difficulty, 
         isActive: true 
     })
         .select('-testCases')
-        .sort({ createdAt: -1 })
-        .limit(limit * 1)
-        .skip((page - 1) * limit);
+        .lean();
 
-    const total = await Problem.countDocuments({ difficulty, isActive: true });
+    // Sort by leetcodeId or title
+    const sortedProblems = allProblems.sort((a, b) => {
+        if (a.leetcodeId && b.leetcodeId) {
+            return parseInt(a.leetcodeId) - parseInt(b.leetcodeId);
+        }
+        return (a.title || '').localeCompare(b.title || '');
+    });
+
+    // Apply pagination
+    const problems = sortedProblems.slice(
+        (parseInt(page) - 1) * parseInt(limit),
+        parseInt(page) * parseInt(limit)
+    );
 
     return res
         .status(200)
@@ -279,26 +423,9 @@ const getProblemsByDifficulty = asyncHandler(async (req, res) => {
 
 // Get random problem
 const getRandomProblem = asyncHandler(async (req, res) => {
-    const { difficulty, source = 'database' } = req.query;
+    const { difficulty } = req.query;
 
-    if (source === 'leetcode') {
-        // Get random problem from LeetCode dataset
-        try {
-            const leetcodeProblem = await LeetCodeDataUtils.getRandomProblem(difficulty);
-            
-            if (!leetcodeProblem) {
-                throw new ApiError(404, "No LeetCode problems found for the specified difficulty");
-            }
-
-            return res
-                .status(200)
-                .json(new ApiResponse(200, leetcodeProblem, "Random LeetCode problem fetched successfully"));
-        } catch (error) {
-            throw new ApiError(500, "Failed to fetch random LeetCode problem");
-        }
-    }
-
-    // Get random problem from database (default behavior)
+    // Get random problem from database
     const matchConditions = { isActive: true };
     if (difficulty) {
         matchConditions.difficulty = difficulty;
@@ -325,44 +452,143 @@ const getRandomProblem = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, problem, "Random problem fetched successfully"));
 });
 
-// Get LeetCode dataset statistics
+// Get database statistics
 const getLeetCodeStats = asyncHandler(async (req, res) => {
     try {
-        const stats = await LeetCodeDataUtils.getDatasetStats();
+        // Get statistics from MongoDB
+        const [totalProblems, easyCount, mediumCount, hardCount, allTags] = await Promise.all([
+            Problem.countDocuments({ isActive: true }),
+            Problem.countDocuments({ difficulty: 'Easy', isActive: true }),
+            Problem.countDocuments({ difficulty: 'Medium', isActive: true }),
+            Problem.countDocuments({ difficulty: 'Hard', isActive: true }),
+            Problem.distinct('tags', { isActive: true })
+        ]);
+
+        const stats = {
+            totalProblems,
+            difficulties: {
+                easy: easyCount,
+                medium: mediumCount,
+                hard: hardCount
+            },
+            totalTags: allTags.length,
+            tags: allTags.sort()
+        };
         
         return res
             .status(200)
-            .json(new ApiResponse(200, stats, "LeetCode dataset statistics fetched successfully"));
+            .json(new ApiResponse(200, stats, "Database statistics fetched successfully"));
     } catch (error) {
-        throw new ApiError(500, "Failed to fetch LeetCode dataset statistics");
+        throw new ApiError(500, "Failed to fetch database statistics");
     }
 });
 
-// Search LeetCode problems
-const searchLeetCodeProblems = asyncHandler(async (req, res) => {
-    const { query, difficulty, tags, limit = 20 } = req.query;
-
-    if (!query && !difficulty && !tags) {
-        throw new ApiError(400, "At least one search parameter is required");
+// Get all available tags/topics
+const getAllTags = asyncHandler(async (req, res) => {
+    try {
+        const allTags = await Problem.distinct('tags', { isActive: true });
+        
+        return res
+            .status(200)
+            .json(new ApiResponse(200, { tags: allTags.sort() }, "Tags fetched successfully"));
+    } catch (error) {
+        throw new ApiError(500, "Failed to fetch tags");
     }
+});
+
+// Search problems from MongoDB database
+const searchLeetCodeProblems = asyncHandler(async (req, res) => {
+    const { 
+        query, 
+        search,
+        difficulty, 
+        tags, 
+        limit = 20,
+        page = 1 
+    } = req.query;
 
     try {
-        let problems = [];
+        // Build MongoDB query
+        const matchConditions = { isActive: true };
+        const searchTerm = query || search;
 
-        if (query) {
-            problems = await LeetCodeDataUtils.searchProblems(query, limit);
-        } else if (tags) {
-            const tagArray = Array.isArray(tags) ? tags : tags.split(',');
-            problems = await LeetCodeDataUtils.getProblemsByTags(tagArray, limit);
-        } else if (difficulty) {
-            problems = await LeetCodeDataUtils.getProblemsByDifficulty(difficulty, limit);
+        // Text search
+        if (searchTerm) {
+            matchConditions.$or = [
+                { title: { $regex: searchTerm, $options: 'i' } },
+                { description: { $regex: searchTerm, $options: 'i' } },
+                { titleSlug: { $regex: searchTerm, $options: 'i' } }
+            ];
         }
+
+        // Difficulty filter
+        if (difficulty) {
+            matchConditions.difficulty = difficulty;
+        }
+
+        // Tags filter
+        if (tags) {
+            const tagArray = Array.isArray(tags) ? tags : tags.split(',');
+            matchConditions.tags = { $in: tagArray };
+        }
+
+        // Get total count for pagination
+        const total = await Problem.countDocuments(matchConditions);
+        const totalPages = Math.ceil(total / limit);
+
+        // Define difficulty order for sorting
+        const difficultyOrder = { 'Easy': 1, 'Medium': 2, 'Hard': 3 };
+
+        // Fetch problems from MongoDB with pagination
+        const problems = await Problem.find(matchConditions)
+            .select('leetcodeId title titleSlug difficulty tags points acceptanceRate')
+            .lean();
+
+        // Sort by difficulty (Easy -> Medium -> Hard), then by leetcodeId or title
+        const sortedProblems = problems.sort((a, b) => {
+            const diffA = difficultyOrder[a.difficulty] || 999;
+            const diffB = difficultyOrder[b.difficulty] || 999;
+            
+            if (diffA !== diffB) {
+                return diffA - diffB;
+            }
+            
+            // If same difficulty, sort by leetcodeId (if available) or title
+            if (a.leetcodeId && b.leetcodeId) {
+                return parseInt(a.leetcodeId) - parseInt(b.leetcodeId);
+            }
+            
+            return (a.title || '').localeCompare(b.title || '');
+        });
+
+        // Apply pagination after sorting
+        const paginatedProblems = sortedProblems.slice(
+            (parseInt(page) - 1) * parseInt(limit),
+            parseInt(page) * parseInt(limit)
+        );
+
+        // Transform to match frontend expectations
+        const transformedProblems = paginatedProblems.map(problem => ({
+            _id: problem._id.toString(),
+            leetcodeId: problem.leetcodeId,
+            title: problem.title,
+            titleSlug: problem.titleSlug,
+            difficulty: problem.difficulty,
+            tags: problem.tags || [],
+            points: problem.points || (problem.difficulty === 'Easy' ? 100 : problem.difficulty === 'Medium' ? 200 : 300),
+        }));
 
         return res
             .status(200)
-            .json(new ApiResponse(200, problems, "LeetCode problems search completed"));
+            .json(new ApiResponse(200, {
+                problems: transformedProblems,
+                totalPages,
+                currentPage: parseInt(page),
+                total
+            }, "Problems fetched successfully from database"));
     } catch (error) {
-        throw new ApiError(500, "Failed to search LeetCode problems");
+        console.error('Problem search error:', error);
+        throw new ApiError(500, "Failed to search problems");
     }
 });
 
@@ -376,5 +602,6 @@ export {
     getProblemsByDifficulty,
     getRandomProblem,
     getLeetCodeStats,
-    searchLeetCodeProblems
+    searchLeetCodeProblems,
+    getAllTags
 };
